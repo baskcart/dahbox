@@ -15,8 +15,10 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get('category') || 'upcoming';
-    const region = searchParams.get('region') || ''; // empty = worldwide
+    const region = searchParams.get('region') || '';
     const page = searchParams.get('page') || '1';
+    const language = searchParams.get('language') || '';   // ISO 639-1: en, ko, hi, ja, zh, ta, te, ar, fr, es...
+    const genre = searchParams.get('genre') || '';         // TMDB genre ID: 28=Action, 16=Animation, etc.
 
     const today = new Date();
     let gteDate: string;
@@ -26,17 +28,15 @@ export async function GET(req: NextRequest) {
 
     switch (category) {
       case 'upcoming': {
-        // Movies releasing in next 60 days — primary market creation window
         const future60 = new Date(today);
         future60.setDate(today.getDate() + 60);
         gteDate = formatDate(today);
         lteDate = formatDate(future60);
         sortBy = 'popularity.desc';
-        extraParams = '&vote_count.gte=0'; // Include unreleased films with no votes yet
+        extraParams = '&vote_count.gte=0';
         break;
       }
       case 'this-weekend': {
-        // Movies releasing this week (for imminent OW markets)
         const nextWeek = new Date(today);
         nextWeek.setDate(today.getDate() + 7);
         gteDate = formatDate(today);
@@ -45,7 +45,6 @@ export async function GET(req: NextRequest) {
         break;
       }
       case 'now-playing': {
-        // Currently in theaters
         const monthAgo = new Date(today);
         monthAgo.setDate(today.getDate() - 30);
         gteDate = formatDate(monthAgo);
@@ -63,8 +62,10 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Add region filter if specified (e.g. US, IN, KR, JP)
+    // Optional filters
     const regionParam = region ? `&region=${region}` : '';
+    const languageParam = language ? `&with_original_language=${language}` : '';
+    const genreParam = genre ? `&with_genres=${genre}` : '';
 
     const url = `https://api.themoviedb.org/3/discover/movie?` +
       `primary_release_date.gte=${gteDate}&` +
@@ -72,7 +73,9 @@ export async function GET(req: NextRequest) {
       `sort_by=${sortBy}&` +
       `page=${page}` +
       extraParams +
-      regionParam;
+      regionParam +
+      languageParam +
+      genreParam;
 
     const response = await fetch(url, { headers: TMDB_HEADERS, next: { revalidate: 3600 } });
 
@@ -86,6 +89,8 @@ export async function GET(req: NextRequest) {
       success: true,
       category,
       region: region || 'worldwide',
+      language: language || 'all',
+      genre: genre || 'all',
       dateRange: { from: gteDate, to: lteDate },
       totalResults: data.total_results,
       movies: data.results || [],
@@ -99,3 +104,4 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+

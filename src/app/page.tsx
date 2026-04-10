@@ -11,6 +11,7 @@ import {
   formatDAH, getMultiplier, MarketCategory,
 } from './lib/types';
 import { generateMarketsForMovie } from './lib/markets';
+import { movieSlug } from './lib/tmdb';
 
 // ─── Constants ───────────────────────────────────
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
@@ -275,14 +276,14 @@ function MovieCard({ markets, onStake }: { markets: Market[]; onStake: (m: Marke
           <span className="text-green-300">{daysLeft}d left</span>
         </div>
 
-        {/* Movie title overlay */}
-        <div className="absolute bottom-3 left-3 right-3">
-          <h3 className="text-white font-bold text-lg leading-tight truncate">{market.movieTitle}</h3>
+        {/* Movie title overlay — links to SEO page */}
+        <a href={`/movie/${movieSlug(market.movieTitle, market.movieId)}`} className="absolute bottom-3 left-3 right-3 group/title">
+          <h3 className="text-white font-bold text-lg leading-tight truncate group-hover/title:text-purple-300 transition-colors">{market.movieTitle}</h3>
           <p className="text-slate-300 text-xs mt-0.5 flex items-center gap-1">
             <Calendar className="w-3 h-3" />
             {new Date(market.releaseDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
           </p>
-        </div>
+        </a>
       </div>
 
       {/* Market type tabs */}
@@ -348,13 +349,60 @@ function MovieCard({ markets, onStake }: { markets: Market[]; onStake: (m: Marke
 }
 
 // ─── Main Page ───────────────────────────────────
+
+// Languages with significant film industries
+const LANGUAGES = [
+  { code: '', label: '🌍 All Languages' },
+  { code: 'en', label: '🇺🇸 English' },
+  { code: 'ko', label: '🇰🇷 Korean' },
+  { code: 'hi', label: '🇮🇳 Hindi' },
+  { code: 'ta', label: '🇮🇳 Tamil' },
+  { code: 'te', label: '🇮🇳 Telugu' },
+  { code: 'ja', label: '🇯🇵 Japanese' },
+  { code: 'zh', label: '🇨🇳 Chinese' },
+  { code: 'es', label: '🇪🇸 Spanish' },
+  { code: 'fr', label: '🇫🇷 French' },
+  { code: 'ar', label: '🇸🇦 Arabic' },
+  { code: 'tl', label: '🇵🇭 Filipino' },
+  { code: 'th', label: '🇹🇭 Thai' },
+  { code: 'id', label: '🇮🇩 Indonesian' },
+  { code: 'tr', label: '🇹🇷 Turkish' },
+  { code: 'pt', label: '🇧🇷 Portuguese' },
+  { code: 'de', label: '🇩🇪 German' },
+  { code: 'it', label: '🇮🇹 Italian' },
+];
+
+// TMDB genre IDs
+const GENRES = [
+  { id: '', label: '🎬 All Genres' },
+  { id: '28', label: '💥 Action' },
+  { id: '16', label: '🎨 Animation' },
+  { id: '35', label: '😂 Comedy' },
+  { id: '80', label: '🔪 Crime' },
+  { id: '18', label: '🎭 Drama' },
+  { id: '14', label: '🧙 Fantasy' },
+  { id: '27', label: '👻 Horror' },
+  { id: '10402', label: '🎵 Music' },
+  { id: '9648', label: '🕵️ Mystery' },
+  { id: '10749', label: '💕 Romance' },
+  { id: '878', label: '🚀 Sci-Fi' },
+  { id: '53', label: '😰 Thriller' },
+  { id: '10752', label: '⚔️ War' },
+  { id: '12', label: '🗺️ Adventure' },
+  { id: '10751', label: '👨‍👩‍👧 Family' },
+  { id: '36', label: '📜 History' },
+  { id: '99', label: '📹 Documentary' },
+];
+
 export default function DahBoxHome() {
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<MarketCategory | 'all'>('all');
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
-  const [dahBalance, setDahBalance] = useState(250); // Simulated initial balance
+  const [dahBalance, setDahBalance] = useState(250);
   const [showGetDAH, setShowGetDAH] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState('');
+  const [selectedGenre, setSelectedGenre] = useState('');
 
   useEffect(() => {
     const generateDemoMarkets = (): Market[] => {
@@ -373,14 +421,19 @@ export default function DahBoxHome() {
     };
 
     const fetchMovies = async () => {
+      setLoading(true);
       try {
-        const res = await fetch('/api/movies?category=upcoming');
+        const params = new URLSearchParams({ category: 'upcoming' });
+        if (selectedLanguage) params.set('language', selectedLanguage);
+        if (selectedGenre) params.set('genre', selectedGenre);
+
+        const res = await fetch(`/api/movies?${params.toString()}`);
         const data = await res.json();
         if (data.success && data.movies?.length > 0) {
           const allMarkets: Market[] = [];
           const topMovies = data.movies
             .filter((m: TMDBMovie) => m.poster_path)
-            .slice(0, 8);
+            .slice(0, 12); // Show up to 12 movies
           
           if (topMovies.length > 0) {
             for (const movie of topMovies) {
@@ -390,17 +443,25 @@ export default function DahBoxHome() {
             return;
           }
         }
-        // API returned no usable movies — use demos
-        setMarkets(generateDemoMarkets());
+        // No results for this combo — show empty state (not demo)
+        if (selectedLanguage || selectedGenre) {
+          setMarkets([]);
+        } else {
+          setMarkets(generateDemoMarkets());
+        }
       } catch (err) {
         console.error('Failed to load movies:', err);
-        setMarkets(generateDemoMarkets());
+        if (!selectedLanguage && !selectedGenre) {
+          setMarkets(generateDemoMarkets());
+        } else {
+          setMarkets([]);
+        }
       } finally {
         setLoading(false);
       }
     };
     fetchMovies();
-  }, []);
+  }, [selectedLanguage, selectedGenre]);
 
   const filteredMarkets = activeCategory === 'all'
     ? markets
@@ -485,7 +546,7 @@ export default function DahBoxHome() {
       </section>
 
       {/* ─── Category Tabs ─── */}
-      <section className="max-w-7xl mx-auto px-4 pb-4">
+      <section className="max-w-7xl mx-auto px-4 pb-2">
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {categories.map(cat => {
             const isActive = activeCategory === cat;
@@ -513,6 +574,46 @@ export default function DahBoxHome() {
         </div>
       </section>
 
+      {/* ─── Language & Genre Filters ─── */}
+      <section className="max-w-7xl mx-auto px-4 pb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={selectedLanguage}
+            onChange={e => setSelectedLanguage(e.target.value)}
+            className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-300 
+                       focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/25
+                       appearance-none cursor-pointer hover:border-white/20 transition-all
+                       bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M2%204l4%204%204-4%22%2F%3E%3C%2Fsvg%3E')]
+                       bg-no-repeat bg-[center_right_0.75rem] pr-8"
+          >
+            {LANGUAGES.map(l => (
+              <option key={l.code} value={l.code} className="bg-[#1A1A3E]">{l.label}</option>
+            ))}
+          </select>
+          <select
+            value={selectedGenre}
+            onChange={e => setSelectedGenre(e.target.value)}
+            className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-300 
+                       focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/25
+                       appearance-none cursor-pointer hover:border-white/20 transition-all
+                       bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M2%204l4%204%204-4%22%2F%3E%3C%2Fsvg%3E')]
+                       bg-no-repeat bg-[center_right_0.75rem] pr-8"
+          >
+            {GENRES.map(g => (
+              <option key={g.id} value={g.id} className="bg-[#1A1A3E]">{g.label}</option>
+            ))}
+          </select>
+          {(selectedLanguage || selectedGenre) && (
+            <button
+              onClick={() => { setSelectedLanguage(''); setSelectedGenre(''); }}
+              className="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2 transition-colors"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      </section>
+
       {/* ─── Markets Grid ─── */}
       <section className="max-w-7xl mx-auto px-4 pb-20">
         {loading ? (
@@ -533,7 +634,19 @@ export default function DahBoxHome() {
         ) : groupedMovies.length === 0 ? (
           <div className="text-center py-20">
             <Film className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-            <p className="text-slate-400 text-lg">No markets in this category yet</p>
+            <p className="text-slate-400 text-lg">
+              {(selectedLanguage || selectedGenre)
+                ? `No upcoming movies found for this ${selectedLanguage ? 'language' : ''}${selectedLanguage && selectedGenre ? ' + ' : ''}${selectedGenre ? 'genre' : ''} combo`
+                : 'No markets in this category yet'}
+            </p>
+            {(selectedLanguage || selectedGenre) && (
+              <button
+                onClick={() => { setSelectedLanguage(''); setSelectedGenre(''); }}
+                className="mt-3 text-sm text-purple-400 hover:text-purple-300 underline underline-offset-2 transition-colors"
+              >
+                Clear filters to see all movies
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -620,7 +733,7 @@ export default function DahBoxHome() {
             <div className="w-5 h-5 rounded bg-gradient-to-br from-purple-600 to-amber-500 flex items-center justify-center">
               <span className="text-[10px] font-black text-white">D</span>
             </div>
-            <span>DahBox · dah.box</span>
+            <span>DahBox · box.dah.gg</span>
           </div>
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <span>Resolution: Box Office Mojo</span>
