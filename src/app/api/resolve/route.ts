@@ -1,4 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  getStakesForMarket,
+  updateStakeStatus,
+  transferDAH,
+  ESCROW_WALLET,
+} from "../../lib/stakes";
 
 const TMDB_TOKEN = process.env.TMDB_ACCESS_TOKEN || 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI2MjAzNTBiYjAxNzNjZDgwYTZlMzFlZWIyYjYzMzkxYyIsIm5iZiI6MTY4NDE3MTA3OC4xMzc5OTk4LCJzdWIiOiI2NDYyNjk0NjBmMzY1NTAwZmNkZjU5ODYiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.UkyNe3YrTaLyWoBFyXeKfKRh2yj8GQTEezw3459ykGw';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
@@ -64,7 +70,7 @@ export async function POST(req: NextRequest) {
 /**
  * SIMULATE mode: randomly pick winners weighted by pool distribution
  */
-function handleSimulatedResolution(movieId: number, markets: any[]) {
+async function handleSimulatedResolution(movieId: number, markets: any[]) {
   const resolutions: MarketResolution[] = [];
 
   for (const market of markets) {
@@ -116,12 +122,16 @@ function handleSimulatedResolution(movieId: number, markets: any[]) {
     });
   }
 
+  // Process payouts for any real stakes
+  const payouts = await processPayouts(resolutions);
+
   return NextResponse.json({
     success: true,
     mode: 'simulate',
     movieId,
     movieTitle: markets[0]?.movieTitle || 'Unknown',
     resolutions,
+    payouts,
   });
 }
 
@@ -244,6 +254,9 @@ async function handleRealResolution(movieId: number, markets: any[]) {
     }
   }
 
+  // Process payouts
+  const payouts = await processPayouts(resolutions);
+
   return NextResponse.json({
     success: true,
     mode: 'real',
@@ -260,5 +273,95 @@ async function handleRealResolution(movieId: number, markets: any[]) {
       estimatedDomestic: `$${Math.round(estimatedDomestic / 1_000_000)}M`,
     },
     resolutions,
+    payouts,
   });
+}
+
+/**
+ * Process payouts for resolved markets.
+ * Queries DAHBOX_STAKES for real user positions, marks winners/losers,
+ * and transfers DAH from escrow to winners via Rolledge.
+ */
+async function processPayouts(resolutions: MarketResolution[]) {
+  const payoutResults: Array<{
+    marketId: string;
+    stakesProcessed: number;
+    winnersCount: number;
+    totalPaid: number;
+    transfers: Array<{ userId: string; amount: number; success: boolean }>;
+  }> = [];
+
+  for (const resolution of resolutions) {
+    try {
+      // Query all stakes for this market
+      const stakes = await getStakesForMarket(resolution.marketId);
+
+      if (stakes.length === 0) {
+        payoutResults.push({
+          marketId: resolution.marketId,
+          stakesProcessed: 0,
+          winnersCount: 0,
+          totalPaid: 0,
+          transfers: [],
+        });
+        continue;
+      }
+
+      // Split into winners and losers
+      const winners = stakes.filter(s => s.outcomeId === resolution.winningOutcomeId);
+      const losers = stakes.filter(s => s.outcomeId !== resolution.winningOutcomeId);
+
+      // Total pool = all stakes for this market
+      const totalPool = stakes.reduce((sum, s) => sum + s.amount, 0);
+      const winnerPool = winners.reduce((sum, s) => sum + s.amount, 0);
+
+      // Mark losers
+      for (const loser of losers) {
+        await updateStakeStatus(loser.pk, loser.sk, 'lost');
+      }
+
+      // Calculate and distribute payouts to winners
+      const transfers: Array<{ userId: string; amount: number; success: boolean }> = [];
+      let totalPaid = 0;
+
+      for (const winner of winners) {
+        // Winner's share: (their stake / total winner stakes) * total pool * 0.97 (3% house)
+        const share = winnerPool > 0 ? winner.amount / winnerPool : 0;
+        const payout = Math.round(share * totalPool * 0.97 * 100) / 100;
+
+        // Transfer from escrow to winner via Rolledge
+        const transfer = await transferDAH(
+          ESCROW_WALLET,
+          winner.userId,
+          payout,
+          `payout:${resolution.marketId}:${resolution.winningOutcomeId}`
+        );
+
+        await updateStakeStatus(winner.pk, winner.sk, transfer.success ? 'paid' : 'won', payout);
+        transfers.push({ userId: winner.userId, amount: payout, success: transfer.success });
+        if (transfer.success) totalPaid += payout;
+      }
+
+      payoutResults.push({
+        marketId: resolution.marketId,
+        stakesProcessed: stakes.length,
+        winnersCount: winners.length,
+        totalPaid,
+        transfers,
+      });
+
+      console.log(`[Resolve] Market ${resolution.marketId}: ${winners.length} winners, ${losers.length} losers, $${totalPaid} DAH paid out`);
+    } catch (err) {
+      console.error(`[Resolve] Payout error for market ${resolution.marketId}:`, err);
+      payoutResults.push({
+        marketId: resolution.marketId,
+        stakesProcessed: 0,
+        winnersCount: 0,
+        totalPaid: 0,
+        transfers: [],
+      });
+    }
+  }
+
+  return payoutResults;
 }
