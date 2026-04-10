@@ -254,12 +254,12 @@ function MovieCard({ markets, onStake }: { markets: Market[]; onStake: (m: Marke
   return (
     <div className="glass-card overflow-hidden group">
       {/* Poster + Gradient overlay */}
-      <div className="relative h-44 poster-shimmer">
+      <div className="relative h-52 poster-shimmer">
         {market.posterPath ? (
           <img
             src={market.posterPath.startsWith('http') ? market.posterPath : `${TMDB_IMAGE_BASE}/w500${market.posterPath}`}
             alt={market.movieTitle}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover object-top"
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-slate-900 flex items-center justify-center">
