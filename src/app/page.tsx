@@ -5,7 +5,7 @@ import {
   TrendingUp, Clock, Trophy, Film, ChevronRight,
   Wallet, Zap, BarChart3, Star, Calendar,
   Gift, Coins, CreditCard, X, ArrowRight, Sparkles,
-  BookOpen, Gamepad2,
+  BookOpen, Gamepad2, CheckCircle2, PlayCircle, Loader2,
 } from 'lucide-react';
 import {
   Market, TMDBMovie, BookItem, GameItem, GENRE_MAP, MARKET_CATEGORIES,
@@ -235,8 +235,21 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
   );
 }
 
+// ─── Resolution state type ──────────────────────
+interface MarketResolutionState {
+  winningOutcomeId: string;
+  winningOutcomeLabel: string;
+  realValue?: string;
+  resolvedAt: string;
+}
+
 // ─── Movie Card (groups all markets for one movie) ─
-function MovieCard({ markets, onStake }: { markets: Market[]; onStake: (m: Market) => void }) {
+function MovieCard({ markets, onStake, resolutions, onResolve }: {
+  markets: Market[];
+  onStake: (m: Market) => void;
+  resolutions: Map<string, MarketResolutionState>;
+  onResolve: (movieId: number, markets: Market[], mode: 'simulate' | 'real') => void;
+}) {
   const [activeIdx, setActiveIdx] = useState(0);
   const market = markets[activeIdx];
   const daysLeft = Math.max(0, Math.ceil((new Date(market.closesAt).getTime() - Date.now()) / 86400000));
@@ -251,8 +264,11 @@ function MovieCard({ markets, onStake }: { markets: Market[]; onStake: (m: Marke
     return 'Market';
   });
 
+  const resolution = resolutions.get(market.id);
+  const isResolved = !!resolution;
+
   return (
-    <div className="glass-card overflow-hidden group">
+    <div className={`glass-card overflow-hidden group ${isResolved ? 'ring-1 ring-green-500/30' : ''}`}>
       {/* Poster + Gradient overlay */}
       <div className="relative h-52 poster-shimmer">
         {market.posterPath ? (
@@ -326,20 +342,27 @@ function MovieCard({ markets, onStake }: { markets: Market[]; onStake: (m: Marke
         <div className="space-y-2">
           {market.outcomes.slice(0, 3).map(o => {
             const pct = market.totalPool > 0 ? (o.totalStaked / market.totalPool * 100) : 0;
+            const isWinner = resolution?.winningOutcomeId === o.id;
             return (
-              <div key={o.id} className="space-y-1">
+              <div key={o.id} className={`space-y-1 ${isWinner ? 'bg-green-500/10 -mx-2 px-2 py-1 rounded-lg border border-green-500/20' : ''}`}>
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-300">{o.label}</span>
-                  <span className="text-amber-400 font-medium">{getMultiplier(o.totalStaked, market.totalPool)}</span>
+                  <span className={`flex items-center gap-1 ${isWinner ? 'text-green-300 font-semibold' : 'text-slate-300'}`}>
+                    {isWinner && <CheckCircle2 className="w-3 h-3 text-green-400" />}
+                    {o.label}
+                  </span>
+                  <span className={`font-medium ${isWinner ? 'text-green-400' : 'text-amber-400'}`}>{isWinner ? 'WINNER' : getMultiplier(o.totalStaked, market.totalPool)}</span>
                 </div>
                 <div className="odds-bar h-2">
-                  <div className="odds-fill" style={{ width: `${pct}%` }} />
+                  <div className={isWinner ? 'h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all' : 'odds-fill'} style={{ width: `${pct}%` }} />
                 </div>
               </div>
             );
           })}
-          {market.outcomes.length > 3 && (
+          {market.outcomes.length > 3 && !isResolved && (
             <p className="text-xs text-slate-500">+{market.outcomes.length - 3} more options</p>
+          )}
+          {resolution?.realValue && (
+            <p className="text-xs text-green-300/80 mt-1 italic">Result: {resolution.realValue}</p>
           )}
         </div>
 
@@ -349,12 +372,38 @@ function MovieCard({ markets, onStake }: { markets: Market[]; onStake: (m: Marke
             <BarChart3 className="w-3 h-3" />
             <span>{formatDAH(market.totalPool)} DAH pool</span>
           </div>
-          <button
-            onClick={() => onStake(market)}
-            className="stake-btn text-xs py-2 px-4"
-          >
-            Predict
-          </button>
+          <div className="flex items-center gap-2">
+            {!isResolved && (
+              <>
+                <button
+                  onClick={() => onResolve(market.movieId, markets, 'simulate')}
+                  className="text-xs py-1.5 px-2.5 rounded-lg bg-orange-500/10 text-orange-300 hover:bg-orange-500/20 border border-orange-500/20 transition-all"
+                  title="Simulate resolution with random winner"
+                >
+                  <PlayCircle className="w-3 h-3 inline mr-1" />Sim
+                </button>
+                {market.mediaType === 'movie' && (
+                  <button
+                    onClick={() => onResolve(market.movieId, markets, 'real')}
+                    className="text-xs py-1.5 px-2.5 rounded-lg bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 border border-blue-500/20 transition-all"
+                    title="Resolve with real TMDB data"
+                  >
+                    <CheckCircle2 className="w-3 h-3 inline mr-1" />Real
+                  </button>
+                )}
+              </>
+            )}
+            {isResolved ? (
+              <span className="text-xs py-1.5 px-3 rounded-lg bg-green-500/10 text-green-300 border border-green-500/20">Resolved</span>
+            ) : (
+              <button
+                onClick={() => onStake(market)}
+                className="stake-btn text-xs py-2 px-4"
+              >
+                Predict
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -417,6 +466,45 @@ export default function DahBoxHome() {
   const [selectedLanguage, setSelectedLanguage] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('');
   const [mediaTab, setMediaTab] = useState<MediaType>('movie');
+  const [resolutions, setResolutions] = useState<Map<string, MarketResolutionState>>(new Map());
+  const [resolveToast, setResolveToast] = useState<string | null>(null);
+
+  const handleResolve = async (movieId: number, movieMarkets: Market[], mode: 'simulate' | 'real') => {
+    try {
+      const res = await fetch('/api/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ movieId, mode, markets: movieMarkets }),
+      });
+      const data = await res.json();
+
+      if (data.success && data.resolutions) {
+        const newMap = new Map(resolutions);
+        for (const r of data.resolutions) {
+          newMap.set(r.marketId, {
+            winningOutcomeId: r.winningOutcomeId,
+            winningOutcomeLabel: r.winningOutcomeLabel,
+            realValue: r.realValue,
+            resolvedAt: r.resolvedAt,
+          });
+        }
+        setResolutions(newMap);
+        setResolveToast(
+          mode === 'real'
+            ? `Resolved ${data.movieTitle} with real TMDB data!`
+            : `Simulated resolution for ${data.movieTitle}`
+        );
+        setTimeout(() => setResolveToast(null), 4000);
+      } else {
+        setResolveToast(data.error || 'Resolution failed');
+        setTimeout(() => setResolveToast(null), 5000);
+      }
+    } catch (err) {
+      console.error('Resolution error:', err);
+      setResolveToast('Network error during resolution');
+      setTimeout(() => setResolveToast(null), 4000);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -678,6 +766,14 @@ export default function DahBoxHome() {
       </section>
       )}
 
+      {/* ─── Resolve Toast ─── */}
+      {resolveToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-500/20 backdrop-blur-xl border border-green-500/30 rounded-2xl px-6 py-3 flex items-center gap-3 shadow-2xl animate-pulse">
+          <CheckCircle2 className="w-5 h-5 text-green-400" />
+          <p className="text-sm text-green-200 font-medium">{resolveToast}</p>
+        </div>
+      )}
+
       {/* ─── Markets Grid ─── */}
       <section className="max-w-7xl mx-auto px-4 pb-20">
         {loading ? (
@@ -716,7 +812,7 @@ export default function DahBoxHome() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {groupedMovies.map((movieMarkets, i) => (
               <div key={movieMarkets[0].movieId} className={`fade-in-up fade-in-up-delay-${Math.min(i + 1, 4)}`}>
-                <MovieCard markets={movieMarkets} onStake={setSelectedMarket} />
+                <MovieCard markets={movieMarkets} onStake={setSelectedMarket} resolutions={resolutions} onResolve={handleResolve} />
               </div>
             ))}
           </div>
