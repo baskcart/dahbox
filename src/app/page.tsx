@@ -5,12 +5,13 @@ import {
   TrendingUp, Clock, Trophy, Film, ChevronRight,
   Wallet, Zap, BarChart3, Star, Calendar,
   Gift, Coins, CreditCard, X, ArrowRight, Sparkles,
+  BookOpen, Gamepad2,
 } from 'lucide-react';
 import {
-  Market, TMDBMovie, GENRE_MAP, MARKET_CATEGORIES,
-  formatDAH, getMultiplier, MarketCategory,
+  Market, TMDBMovie, BookItem, GameItem, GENRE_MAP, MARKET_CATEGORIES,
+  formatDAH, getMultiplier, MarketCategory, MediaType,
 } from './lib/types';
-import { generateMarketsForMovie } from './lib/markets';
+import { generateMarketsForMovie, generateMarketsForBook, generateMarketsForGame } from './lib/markets';
 import { movieSlug } from './lib/tmdb';
 
 // ─── Constants ───────────────────────────────────
@@ -245,6 +246,8 @@ function MovieCard({ markets, onStake }: { markets: Market[]; onStake: (m: Marke
   const tabLabels = markets.map(m => {
     if (m.question.includes('Over/Under')) return 'Over/Under';
     if (m.question.includes('Opening Weekend')) return 'OW Bracket';
+    if (m.question.includes('Will') && m.question.includes('adaptation')) return 'Adaptation?';
+    if (m.question.includes('Best format') || m.question.includes('Live-Action or')) return 'Format';
     return 'Market';
   });
 
@@ -254,7 +257,7 @@ function MovieCard({ markets, onStake }: { markets: Market[]; onStake: (m: Marke
       <div className="relative h-44 poster-shimmer">
         {market.posterPath ? (
           <img
-            src={`${TMDB_IMAGE_BASE}/w500${market.posterPath}`}
+            src={market.posterPath.startsWith('http') ? market.posterPath : `${TMDB_IMAGE_BASE}/w500${market.posterPath}`}
             alt={market.movieTitle}
             className="w-full h-full object-cover"
           />
@@ -276,14 +279,24 @@ function MovieCard({ markets, onStake }: { markets: Market[]; onStake: (m: Marke
           <span className="text-green-300">{daysLeft}d left</span>
         </div>
 
-        {/* Movie title overlay — links to SEO page */}
-        <a href={`/movie/${movieSlug(market.movieTitle, market.movieId)}`} className="absolute bottom-3 left-3 right-3 group/title">
-          <h3 className="text-white font-bold text-lg leading-tight truncate group-hover/title:text-purple-300 transition-colors">{market.movieTitle}</h3>
-          <p className="text-slate-300 text-xs mt-0.5 flex items-center gap-1">
-            <Calendar className="w-3 h-3" />
-            {new Date(market.releaseDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </p>
-        </a>
+        {/* Title overlay — links to SEO page for movies */}
+        {market.mediaType === 'movie' ? (
+          <a href={`/movie/${movieSlug(market.movieTitle, market.movieId)}`} className="absolute bottom-3 left-3 right-3 group/title">
+            <h3 className="text-white font-bold text-lg leading-tight truncate group-hover/title:text-purple-300 transition-colors">{market.movieTitle}</h3>
+            <p className="text-slate-300 text-xs mt-0.5 flex items-center gap-1">
+              <Calendar className="w-3 h-3" />
+              {new Date(market.releaseDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </p>
+          </a>
+        ) : (
+          <div className="absolute bottom-3 left-3 right-3">
+            <h3 className="text-white font-bold text-lg leading-tight truncate">{market.movieTitle}</h3>
+            <p className="text-slate-300 text-xs mt-0.5 flex items-center gap-1">
+              {market.mediaType === 'book' ? <BookOpen className="w-3 h-3" /> : <Gamepad2 className="w-3 h-3" />}
+              {market.mediaType === 'book' ? 'Novel' : 'Video Game'}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Market type tabs */}
@@ -403,65 +416,78 @@ export default function DahBoxHome() {
   const [showGetDAH, setShowGetDAH] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('');
+  const [mediaTab, setMediaTab] = useState<MediaType>('movie');
 
   useEffect(() => {
-    const generateDemoMarkets = (): Market[] => {
-      const demoMovies = [
-        { id: 1, title: 'Thunderbolts*', poster_path: null, release_date: '2026-05-02', popularity: 300 },
-        { id: 2, title: 'Mission: Impossible 8', poster_path: null, release_date: '2026-05-23', popularity: 450 },
-        { id: 3, title: 'Jurassic World: Rebirth', poster_path: null, release_date: '2026-07-04', popularity: 380 },
-        { id: 4, title: 'The Fantastic Four', poster_path: null, release_date: '2026-07-25', popularity: 420 },
-        { id: 5, title: 'Avatar: Fire and Ash', poster_path: null, release_date: '2026-12-19', popularity: 500 },
-      ];
-      const allMarkets: Market[] = [];
-      for (const movie of demoMovies) {
-        allMarkets.push(...generateMarketsForMovie(movie));
-      }
-      return allMarkets;
-    };
-
-    const fetchMovies = async () => {
+    const fetchData = async () => {
       setLoading(true);
+      setActiveCategory('all');
       try {
-        const params = new URLSearchParams({ category: 'upcoming' });
-        if (selectedLanguage) params.set('language', selectedLanguage);
-        if (selectedGenre) params.set('genre', selectedGenre);
+        if (mediaTab === 'movie') {
+          const params = new URLSearchParams({ category: 'upcoming' });
+          if (selectedLanguage) params.set('language', selectedLanguage);
+          if (selectedGenre) params.set('genre', selectedGenre);
 
-        const res = await fetch(`/api/movies?${params.toString()}`);
-        const data = await res.json();
-        if (data.success && data.movies?.length > 0) {
-          const allMarkets: Market[] = [];
-          const topMovies = data.movies
-            .filter((m: TMDBMovie) => m.poster_path)
-            .slice(0, 12); // Show up to 12 movies
-          
-          if (topMovies.length > 0) {
+          const res = await fetch(`/api/movies?${params.toString()}`);
+          const data = await res.json();
+          if (data.success && data.movies?.length > 0) {
+            const allMarkets: Market[] = [];
+            const topMovies = data.movies
+              .filter((m: TMDBMovie) => m.poster_path)
+              .slice(0, 12);
             for (const movie of topMovies) {
               allMarkets.push(...generateMarketsForMovie(movie));
             }
             setMarkets(allMarkets);
             return;
           }
-        }
-        // No results for this combo — show empty state (not demo)
-        if (selectedLanguage || selectedGenre) {
           setMarkets([]);
-        } else {
-          setMarkets(generateDemoMarkets());
+        } else if (mediaTab === 'book') {
+          const params = new URLSearchParams({ category: 'trending' });
+          if (selectedGenre) params.set('genre', selectedGenre);
+
+          const res = await fetch(`/api/books?${params.toString()}`);
+          const data = await res.json();
+          if (data.success && data.books?.length > 0) {
+            const allMarkets: Market[] = [];
+            const topBooks = data.books
+              .filter((b: BookItem) => b.imageUrl)
+              .slice(0, 12);
+            for (const book of topBooks) {
+              allMarkets.push(...generateMarketsForBook(book));
+            }
+            setMarkets(allMarkets);
+            return;
+          }
+          setMarkets([]);
+        } else if (mediaTab === 'game') {
+          const params = new URLSearchParams({ category: 'popular' });
+          if (selectedGenre) params.set('genre', selectedGenre);
+
+          const res = await fetch(`/api/games?${params.toString()}`);
+          const data = await res.json();
+          if (data.success && data.games?.length > 0) {
+            const allMarkets: Market[] = [];
+            const topGames = data.games
+              .filter((g: GameItem) => g.background_image || g.name)
+              .slice(0, 12);
+            for (const game of topGames) {
+              allMarkets.push(...generateMarketsForGame(game));
+            }
+            setMarkets(allMarkets);
+            return;
+          }
+          setMarkets([]);
         }
       } catch (err) {
-        console.error('Failed to load movies:', err);
-        if (!selectedLanguage && !selectedGenre) {
-          setMarkets(generateDemoMarkets());
-        } else {
-          setMarkets([]);
-        }
+        console.error(`Failed to load ${mediaTab}s:`, err);
+        setMarkets([]);
       } finally {
         setLoading(false);
       }
     };
-    fetchMovies();
-  }, [selectedLanguage, selectedGenre]);
+    fetchData();
+  }, [mediaTab, selectedLanguage, selectedGenre]);
 
   const filteredMarkets = activeCategory === 'all'
     ? markets
@@ -475,7 +501,12 @@ export default function DahBoxHome() {
   }, {});
   const groupedMovies = Object.values(movieGroups);
 
-  const categories = ['all', ...Object.keys(MARKET_CATEGORIES)] as (MarketCategory | 'all')[];
+  const categoriesForTab: Record<MediaType, MarketCategory[]> = {
+    movie: ['opening-weekend', 'total-gross', 'critical', 'awards', 'indie'],
+    book: ['book-to-movie', 'bestseller', 'book-award'],
+    game: ['game-to-movie', 'game-award', 'game-sales'],
+  };
+  const categories = ['all', ...categoriesForTab[mediaTab]] as (MarketCategory | 'all')[];
 
   return (
     <div className="min-h-screen relative">
@@ -524,10 +555,14 @@ export default function DahBoxHome() {
       <section className="relative max-w-7xl mx-auto px-4 pt-10 pb-6">
         <div className="text-center space-y-3 fade-in-up">
           <h2 className="text-4xl md:text-5xl font-extrabold text-white">
-            Predict the <span className="bg-gradient-to-r from-purple-400 to-amber-400 bg-clip-text text-transparent">Box Office</span>
+            {mediaTab === 'movie' && <>Predict the <span className="bg-gradient-to-r from-purple-400 to-amber-400 bg-clip-text text-transparent">Box Office</span></>}
+            {mediaTab === 'book' && <>Which Books Become <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">Movies</span>?</>}
+            {mediaTab === 'game' && <>Which Games Become <span className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Movies</span>?</>}
           </h2>
           <p className="text-lg text-slate-400 max-w-xl mx-auto">
-            Stake DAH on opening weekends, total gross, and critic scores. Win big when you call it right.
+            {mediaTab === 'movie' && 'Stake DAH on opening weekends, total gross, and critic scores. Win big when you call it right.'}
+            {mediaTab === 'book' && 'Predict which bestselling novels will get a movie or TV adaptation. Stake DAH on your literary instincts.'}
+            {mediaTab === 'game' && 'Predict which iconic video games will get Hollywood adaptations. Live-action or animated? You decide.'}
           </p>
           <p className="text-sm text-slate-500 max-w-md mx-auto">
             New here? <button onClick={() => setShowGetDAH(true)} className="text-purple-400 hover:text-purple-300 font-medium underline underline-offset-2 transition-colors">Learn how to get DAH tokens</button> to start predicting.
@@ -535,13 +570,40 @@ export default function DahBoxHome() {
           <div className="flex items-center justify-center gap-6 pt-2">
             <div className="flex items-center gap-2 text-sm text-slate-300">
               <TrendingUp className="w-4 h-4 text-green-400" />
-              <span>{groupedMovies.length} Movies</span>
+              <span>{groupedMovies.length} {mediaTab === 'movie' ? 'Movies' : mediaTab === 'book' ? 'Books' : 'Games'}</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-slate-300">
               <Trophy className="w-4 h-4 text-amber-400" />
               <span>{formatDAH(markets.reduce((s, m) => s + m.totalPool, 0))} DAH Staked</span>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ─── Media Type Tabs ─── */}
+      <section className="max-w-7xl mx-auto px-4 pb-3">
+        <div className="flex gap-1 p-1 rounded-2xl bg-white/5 border border-white/10 w-fit">
+          {[
+            { id: 'movie' as MediaType, label: 'Movies', icon: <Film className="w-4 h-4" />, color: 'from-purple-500 to-amber-500' },
+            { id: 'book' as MediaType, label: 'Books', icon: <BookOpen className="w-4 h-4" />, color: 'from-emerald-500 to-teal-500' },
+            { id: 'game' as MediaType, label: 'Games', icon: <Gamepad2 className="w-4 h-4" />, color: 'from-blue-500 to-indigo-500' },
+          ].map(tab => {
+            const isActive = mediaTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => { setMediaTab(tab.id); setSelectedLanguage(''); setSelectedGenre(''); }}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                  isActive
+                    ? `bg-gradient-to-r ${tab.color} text-white shadow-lg`
+                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -574,7 +636,8 @@ export default function DahBoxHome() {
         </div>
       </section>
 
-      {/* ─── Language & Genre Filters ─── */}
+      {/* ─── Language & Genre Filters (Movies only) ─── */}
+      {mediaTab === 'movie' && (
       <section className="max-w-7xl mx-auto px-4 pb-4">
         <div className="flex flex-wrap items-center gap-3">
           <select
@@ -613,6 +676,7 @@ export default function DahBoxHome() {
           )}
         </div>
       </section>
+      )}
 
       {/* ─── Markets Grid ─── */}
       <section className="max-w-7xl mx-auto px-4 pb-20">
