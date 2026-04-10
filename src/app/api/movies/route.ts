@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const TMDB_TOKEN = process.env.TMDB_ACCESS_TOKEN || '';
+const TMDB_TOKEN = process.env.TMDB_ACCESS_TOKEN || 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI2MjAzNTBiYjAxNzNjZDgwYTZlMzFlZWIyYjYzMzkxYyIsIm5iZiI6MTY4NDE3MTA3OC4xMzc5OTk4LCJzdWIiOiI2NDYyNjk0NjBmMzY1NTAwZmNkZjU5ODYiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.UkyNe3YrTaLyWoBFyXeKfKRh2yj8GQTEezw3459ykGw';
 
 const TMDB_HEADERS = {
   'Authorization': `Bearer ${TMDB_TOKEN}`,
