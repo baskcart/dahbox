@@ -607,6 +607,31 @@ export default function DahBoxHome() {
     fetchData();
   }, [mediaTab, selectedLanguage, selectedGenre]);
 
+  // Broadcast filter selections up to the controller application if in remote mode
+  useEffect(() => {
+    if (isRemote && typeof window !== 'undefined' && window.parent && window.parent !== window) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const screenCode = urlParams.get('screenCode');
+      window.parent.postMessage({
+        type: 'DAHBOX_FILTER_CHANGED',
+        screenCode: screenCode || 'PHONE_MODE',
+        payload: { lang: selectedLanguage, genre: selectedGenre }
+      }, "*");
+    }
+  }, [selectedLanguage, selectedGenre, isRemote]);
+
+  // Listen for filter sync events (primarily for the TV view mirroring the remote phone)
+  useEffect(() => {
+    const handleSync = (e: MessageEvent) => {
+      if (e.data?.type === 'SYNC_FILTERS') {
+        if (e.data.lang !== undefined) setSelectedLanguage(e.data.lang);
+        if (e.data.genre !== undefined) setSelectedGenre(e.data.genre);
+      }
+    };
+    window.addEventListener('message', handleSync);
+    return () => window.removeEventListener('message', handleSync);
+  }, []);
+
   const filteredMarkets = activeCategory === 'all'
     ? markets
     : markets.filter(m => m.category === activeCategory);
@@ -639,7 +664,10 @@ export default function DahBoxHome() {
               <img src="/box-logo.png" alt="DahBox Logo" className="w-full h-full object-cover" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-white tracking-tight">DahBox</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-bold text-white tracking-tight">DahBox</h1>
+                <span className="px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-[9px] font-bold text-amber-500 uppercase tracking-widest shadow-[0_0_8px_rgba(245,158,11,0.1)]">Beta</span>
+              </div>
               <p className="text-[10px] text-slate-400 -mt-0.5">Movie Prediction Market</p>
             </div>
           </div>
