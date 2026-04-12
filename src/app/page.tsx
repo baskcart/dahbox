@@ -222,7 +222,24 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
 
             {/* Stake Button */}
             <button
-              onClick={() => setStaked(true)}
+              onClick={() => {
+                setStaked(true);
+                if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+                  const urlParams = new URLSearchParams(window.location.search);
+                  const screenCode = urlParams.get('screenCode');
+                  if (screenCode) {
+                    window.parent.postMessage({
+                      type: "STAKE_PLACED",
+                      screenCode,
+                      payload: {
+                        amount: amount,
+                        movie: market.movieTitle,
+                        outcome: outcome?.label
+                      }
+                    }, "*");
+                  }
+                }
+              }}
               disabled={!selectedOutcome}
               className="stake-btn w-full py-3 text-center disabled:opacity-30 disabled:cursor-not-allowed"
             >
@@ -900,7 +917,9 @@ export default function DahBoxHome() {
             <span>·</span>
             <span>Platform Fee: 3%</span>
             <span>·</span>
-            <span>Powered by Dahling Ecosystem</span>
+            <a href="https://dah.gg" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors">
+              Powered by Dahling Ecosystem
+            </a>
           </div>
         </div>
       </footer>
