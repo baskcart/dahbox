@@ -485,6 +485,17 @@ export default function DahBoxHome() {
   const [mediaTab, setMediaTab] = useState<MediaType>('movie');
   const [resolutions, setResolutions] = useState<Map<string, MarketResolutionState>>(new Map());
   const [resolveToast, setResolveToast] = useState<string | null>(null);
+  const [isTvView, setIsTvView] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      if (p.has("screenCode")) setIsTvView(true);
+      if (p.has("lang")) {
+        setSelectedLanguage(p.get("lang") || '');
+      }
+    }
+  }, []);
 
   const handleResolve = async (movieId: number, movieMarkets: Market[], mode: 'simulate' | 'real') => {
     try {
@@ -618,6 +629,7 @@ export default function DahBoxHome() {
       <div className="cinema-glow" />
 
       {/* ─── Header ─── */}
+      {!isTvView && (
       <header className="sticky top-0 z-40 border-b border-white/5" style={{ background: 'rgba(10,10,26,0.85)', backdropFilter: 'blur(20px)' }}>
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -655,6 +667,7 @@ export default function DahBoxHome() {
           </div>
         </div>
       </header>
+      )}
 
       {/* ─── Hero ─── */}
       <section className="relative max-w-7xl mx-auto px-4 pt-10 pb-6">
@@ -686,6 +699,8 @@ export default function DahBoxHome() {
       </section>
 
       {/* ─── Media Type Tabs ─── */}
+      {!isTvView && (
+        <>
       <section className="max-w-7xl mx-auto px-4 pb-3">
         <div className="flex gap-1 p-1 rounded-2xl bg-white/5 border border-white/10 w-fit">
           {[
@@ -740,9 +755,11 @@ export default function DahBoxHome() {
           })}
         </div>
       </section>
+        </>
+      )}
 
       {/* ─── Language & Genre Filters (Movies only) ─── */}
-      {mediaTab === 'movie' && (
+      {!isTvView && mediaTab === 'movie' && (
       <section className="max-w-7xl mx-auto px-4 pb-4">
         <div className="flex flex-wrap items-center gap-3">
           <select
@@ -837,6 +854,8 @@ export default function DahBoxHome() {
       </section>
 
       {/* ─── How to Get DAH ─── */}
+      {!isTvView && (
+        <>
       <section className="max-w-7xl mx-auto px-4 pb-8">
         <div className="glass-card p-6 md:p-8">
           <div className="flex items-center gap-2 mb-5">
@@ -923,6 +942,8 @@ export default function DahBoxHome() {
           </div>
         </div>
       </footer>
+        </>
+      )}
 
       {/* ─── Stake Modal ─── */}
       {selectedMarket && (
