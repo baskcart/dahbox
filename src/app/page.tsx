@@ -126,21 +126,21 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
     : '0';
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="glass-card max-w-md w-full p-6 space-y-5" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50 p-3" onClick={onClose}>
+      <div className="glass-card max-w-md w-full p-4 space-y-3 shadow-xl" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-start gap-3">
           {market.posterPath && (
             <img
               src={`${TMDB_IMAGE_BASE}/w92${market.posterPath}`}
               alt={market.movieTitle}
-              className="w-14 h-20 rounded-lg object-cover"
+              className="w-10 h-14 rounded-lg object-cover"
             />
           )}
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-bold text-white truncate">{market.movieTitle}</h3>
-            <p className="text-sm text-purple-300 mt-0.5">{market.question}</p>
-            <p className="text-xs text-slate-400 mt-1">Pool: {formatDAH(market.totalPool)} DAH</p>
+            <h3 className="text-base font-bold text-white leading-tight truncate">{market.movieTitle}</h3>
+            <p className="text-xs text-purple-300 mt-0.5 leading-snug">{market.question}</p>
+            <p className="text-[10px] text-slate-400 mt-1">Pool: {formatDAH(market.totalPool)} DAH</p>
           </div>
         </div>
 
@@ -160,8 +160,8 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
         ) : (
           <>
             {/* Outcome Selection */}
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-300">Select your prediction:</p>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-slate-300">Select your prediction:</p>
               {market.outcomes.map(o => {
                 const isSelected = selectedOutcome === o.id;
                 const pct = market.totalPool > 0 ? (o.totalStaked / market.totalPool * 100).toFixed(0) : '0';
@@ -169,7 +169,7 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
                   <button
                     key={o.id}
                     onClick={() => setSelectedOutcome(o.id)}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
+                    className={`w-full flex items-center justify-between py-2 px-3 rounded-lg border transition-all ${
                       isSelected
                         ? 'border-purple-500 bg-purple-500/15'
                         : 'border-white/10 bg-white/5 hover:border-white/20'
@@ -193,16 +193,16 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
             </div>
 
             {/* Amount */}
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-300">Stake amount (DAH):</p>
-              <div className="flex gap-2">
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-slate-300">Stake amount (DAH):</p>
+              <div className="flex gap-1.5">
                 {[5, 10, 25, 50, 100].map(v => (
                   <button
                     key={v}
                     onClick={() => setAmount(v)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                    className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-all ${
                       amount === v
-                        ? 'bg-purple-600 text-white'
+                        ? 'bg-purple-600 text-white shadow-inner'
                         : 'bg-white/5 text-slate-300 hover:bg-white/10'
                     }`}
                   >
@@ -214,9 +214,9 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
 
             {/* Potential Payout */}
             {selectedOutcome && (
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex justify-between items-center">
-                <span className="text-sm text-amber-200">Potential payout</span>
-                <span className="text-lg font-bold text-amber-400">{potentialPayout} DAH</span>
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 flex justify-between items-center">
+                <span className="text-xs text-amber-200">Potential payout</span>
+                <span className="text-sm font-bold text-amber-400">{potentialPayout} DAH</span>
               </div>
             )}
 
@@ -241,7 +241,7 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
                 }
               }}
               disabled={!selectedOutcome}
-              className="stake-btn w-full py-3 text-center disabled:opacity-30 disabled:cursor-not-allowed"
+              className="stake-btn w-full py-2.5 text-sm font-bold text-center disabled:opacity-30 disabled:cursor-not-allowed"
             >
               {selectedOutcome ? `Stake ${amount} DAH` : 'Select a prediction'}
             </button>
@@ -635,8 +635,8 @@ export default function DahBoxHome() {
       <header className="sticky top-0 z-40 border-b border-white/5" style={{ background: 'rgba(10,10,26,0.85)', backdropFilter: 'blur(20px)' }}>
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-600 to-amber-500 flex items-center justify-center">
-              <span className="text-lg font-black text-white">D</span>
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg flex items-center justify-center">
+              <img src="/box-logo.png" alt="DahBox Logo" className="w-full h-full object-cover" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-white tracking-tight">DahBox</h1>
