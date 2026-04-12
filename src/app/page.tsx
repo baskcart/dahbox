@@ -486,11 +486,13 @@ export default function DahBoxHome() {
   const [resolutions, setResolutions] = useState<Map<string, MarketResolutionState>>(new Map());
   const [resolveToast, setResolveToast] = useState<string | null>(null);
   const [isTvView, setIsTvView] = useState(false);
+  const [isRemote, setIsRemote] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const p = new URLSearchParams(window.location.search);
       if (p.get("view") === "tv") setIsTvView(true);
+      if (p.get("view") === "remote") setIsRemote(true);
       if (p.has("lang")) {
         setSelectedLanguage(p.get("lang") || '');
       }
@@ -629,7 +631,7 @@ export default function DahBoxHome() {
       <div className="cinema-glow" />
 
       {/* ─── Header ─── */}
-      {!isTvView && (
+      {(!isTvView && !isRemote) && (
       <header className="sticky top-0 z-40 border-b border-white/5" style={{ background: 'rgba(10,10,26,0.85)', backdropFilter: 'blur(20px)' }}>
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -699,7 +701,7 @@ export default function DahBoxHome() {
       </section>
 
       {/* ─── Media Type Tabs ─── */}
-      {!isTvView && (
+      {(!isTvView && !isRemote) && (
         <>
       <section className="max-w-7xl mx-auto px-4 pb-3">
         <div className="flex gap-1 p-1 rounded-2xl bg-white/5 border border-white/10 w-fit">
@@ -854,7 +856,7 @@ export default function DahBoxHome() {
       </section>
 
       {/* ─── How to Get DAH ─── */}
-      {!isTvView && (
+      {(!isTvView && !isRemote) && (
         <>
       <section className="max-w-7xl mx-auto px-4 pb-8">
         <div className="glass-card p-6 md:p-8">
