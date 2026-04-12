@@ -490,7 +490,7 @@ export default function DahBoxHome() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const p = new URLSearchParams(window.location.search);
-      if (p.has("screenCode")) setIsTvView(true);
+      if (p.get("view") === "tv") setIsTvView(true);
       if (p.has("lang")) {
         setSelectedLanguage(p.get("lang") || '');
       }
