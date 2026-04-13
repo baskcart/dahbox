@@ -119,6 +119,21 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
   const [selectedOutcome, setSelectedOutcome] = useState<string | null>(null);
   const [amount, setAmount] = useState(10);
   const [staked, setStaked] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    const handleMsg = (e: MessageEvent) => {
+      if (e.data?.type === 'STAKE_CONFIRMED') {
+        setIsProcessing(false);
+        setStaked(true);
+      }
+      if (e.data?.type === 'STAKE_REJECTED') {
+        setIsProcessing(false);
+      }
+    };
+    window.addEventListener('message', handleMsg);
+    return () => window.removeEventListener('message', handleMsg);
+  }, []);
 
   const outcome = market.outcomes.find(o => o.id === selectedOutcome);
   const potentialPayout = outcome
@@ -223,27 +238,29 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
             {/* Stake Button */}
             <button
               onClick={() => {
-                setStaked(true);
                 if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
                   const urlParams = new URLSearchParams(window.location.search);
-                  const screenCode = urlParams.get('screenCode');
-                  if (screenCode) {
-                    window.parent.postMessage({
-                      type: "STAKE_PLACED",
-                      screenCode,
-                      payload: {
-                        amount: amount,
-                        movie: market.movieTitle,
-                        outcome: outcome?.label
-                      }
-                    }, "*");
-                  }
+                  const screenCode = urlParams.get('screenCode') || "PHONE_MODE";
+                  
+                  setIsProcessing(true);
+                  window.parent.postMessage({
+                    type: "STAKE_PLACED",
+                    screenCode,
+                    payload: {
+                      amount: amount,
+                      movie: market.movieTitle,
+                      outcome: outcome?.label
+                    }
+                  }, "*");
+                } else {
+                  setStaked(true);
                 }
               }}
-              disabled={!selectedOutcome}
-              className="stake-btn w-full py-2.5 text-sm font-bold text-center disabled:opacity-30 disabled:cursor-not-allowed"
+              disabled={!selectedOutcome || isProcessing}
+              className="stake-btn w-full py-2.5 text-sm font-bold text-center disabled:opacity-30 disabled:cursor-not-allowed flex justify-center items-center gap-2"
             >
-              {selectedOutcome ? `Stake ${amount} DAH` : 'Select a prediction'}
+              {isProcessing && <Loader2 size={16} className="animate-spin" />}
+              {isProcessing ? 'Processing...' : (selectedOutcome ? `Stake ${amount} DAH` : 'Select a prediction')}
             </button>
           </>
         )}
