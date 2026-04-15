@@ -257,7 +257,12 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
                     totalPool: market.totalPool,
                     outcomeStaked: outcome?.totalStaked || 0
                   })
-                }).then(() => {
+                }).then(async (res) => {
+                  const data = await res.json();
+                  if (!res.ok || !data.success) {
+                    throw new Error(data.error || "Stake failed");
+                  }
+                  
                   setStaked(true);
                   setIsProcessing(false);
                   
@@ -276,6 +281,7 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
                   }
                 }).catch(e => {
                   console.error("Stake failed", e);
+                  alert(`Stake Error: ${e.message}`);
                   setIsProcessing(false);
                 });
               }}
