@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { Trophy, ArrowLeft, Loader2, Sparkles, Medal } from 'lucide-react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { formatDAH } from '../lib/types';
 import type { LeaderboardRecord } from '../lib/stakes';
 
 export default function LeaderboardPage() {
+    const router = useRouter();
     const [leaders, setLeaders] = useState<LeaderboardRecord[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -46,7 +47,7 @@ export default function LeaderboardPage() {
                 window.parent.postMessage({ type: "DAHBOX_NAVIGATE", screenCode, path: "/" }, "*");
             }
             // Navigate locally
-            window.location.href = "/";
+            router.push("/");
         }, 30000); // 30 seconds
 
         return () => clearTimeout(timer);
@@ -65,7 +66,7 @@ export default function LeaderboardPage() {
                             const screenCode = urlParams.get('screenCode') || "PHONE_MODE";
                             window.parent.postMessage({ type: "DAHBOX_NAVIGATE", screenCode, path: "/" }, "*");
                         }
-                        window.location.href = "/";
+                        router.push("/");
                     }} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm">
                         <ArrowLeft className="w-4 h-4" /> Back to Predictions
                     </button>

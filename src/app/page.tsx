@@ -13,6 +13,7 @@ import {
 } from './lib/types';
 import { generateMarketsForMovie, generateMarketsForBook, generateMarketsForGame } from './lib/markets';
 import { movieSlug } from './lib/tmdb';
+import { useRouter } from 'next/navigation';
 
 // ─── Constants ───────────────────────────────────
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
@@ -238,23 +239,45 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
             {/* Stake Button */}
             <button
               onClick={() => {
-                if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
-                  const urlParams = new URLSearchParams(window.location.search);
-                  const screenCode = urlParams.get('screenCode') || "PHONE_MODE";
-                  
-                  setIsProcessing(true);
-                  window.parent.postMessage({
-                    type: "STAKE_PLACED",
-                    screenCode,
-                    payload: {
-                      amount: amount,
-                      movie: market.movieTitle,
-                      outcome: outcome?.label
-                    }
-                  }, "*");
-                } else {
+                const urlParams = new URLSearchParams(window.location.search);
+                const walletUser = urlParams.get('wallet') || "TEST_DEV_USER";
+                setIsProcessing(true);
+
+                // 1) Write the Stake to DahBox Backend
+                fetch('/api/stake', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({
+                    userId: walletUser,
+                    marketId: market.id,
+                    outcomeId: outcome?.id,
+                    outcomeLabel: outcome?.label,
+                    movieTitle: market.movieTitle,
+                    amount: amount,
+                    totalPool: market.totalPool,
+                    outcomeStaked: outcome?.totalStaked || 0
+                  })
+                }).then(() => {
                   setStaked(true);
-                }
+                  setIsProcessing(false);
+                  
+                  // 2) If in kiosk mode, sync the visuals with the Memi controller
+                  if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+                    const screenCode = urlParams.get('screenCode') || "PHONE_MODE";
+                    window.parent.postMessage({
+                      type: "STAKE_PLACED",
+                      screenCode,
+                      payload: {
+                        amount: amount,
+                        movie: market.movieTitle,
+                        outcome: outcome?.label
+                      }
+                    }, "*");
+                  }
+                }).catch(e => {
+                  console.error("Stake failed", e);
+                  setIsProcessing(false);
+                });
               }}
               disabled={!selectedOutcome || isProcessing}
               className="stake-btn w-full py-2.5 text-sm font-bold text-center disabled:opacity-30 disabled:cursor-not-allowed flex justify-center items-center gap-2"
@@ -491,6 +514,7 @@ const GENRES = [
 ];
 
 export default function DahBoxHome() {
+  const router = useRouter();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<MarketCategory | 'all'>('all');
@@ -690,20 +714,6 @@ export default function DahBoxHome() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Leaderboard Link */}
-            <button onClick={(e) => {
-              e.preventDefault();
-              if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
-                const urlParams = new URLSearchParams(window.location.search);
-                const screenCode = urlParams.get('screenCode') || "PHONE_MODE";
-                window.parent.postMessage({ type: "DAHBOX_NAVIGATE", screenCode, path: "/leaderboard" }, "*");
-              }
-              window.location.href = "/leaderboard";
-            }} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 transition-all text-blue-300 font-medium text-xs">
-              <Trophy className="w-3.5 h-3.5 text-blue-400" />
-              Leaderboard
-            </button>
-
             {/* DAHLOR maturity teaser */}
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 maturity-badge">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
@@ -1005,6 +1015,22 @@ export default function DahBoxHome() {
       </footer>
         </>
       )}
+
+      {/* ─── Floating Leaderboard Button ─── */}
+      <button 
+        onClick={(e) => {
+          e.preventDefault();
+          if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const screenCode = urlParams.get('screenCode') || "PHONE_MODE";
+            window.parent.postMessage({ type: "DAHBOX_NAVIGATE", screenCode, path: "/leaderboard" }, "*");
+          }
+          router.push("/leaderboard");
+        }}
+        className="fixed bottom-6 right-6 md:bottom-10 md:right-10 z-50 flex items-center justify-center w-14 h-14 bg-gradient-to-br from-blue-600 to-indigo-700 shadow-[0_0_20px_rgba(37,99,235,0.4)] rounded-full text-white hover:scale-105 transition-transform"
+      >
+        <Trophy className="w-6 h-6" />
+      </button>
 
       {/* ─── Stake Modal ─── */}
       {selectedMarket && (
