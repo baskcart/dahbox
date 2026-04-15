@@ -88,7 +88,9 @@ export async function updateStakeStatus(
   pk: string,
   sk: string,
   status: "won" | "lost" | "paid",
-  actualPayout?: number
+  actualPayout?: number,
+  userId?: string,
+  stakedAmount?: number
 ): Promise<void> {
   const updateExpr = actualPayout !== undefined
     ? "SET #s = :status, resolvedAt = :now, actualPayout = :payout"
@@ -111,6 +113,61 @@ export async function updateStakeStatus(
       ExpressionAttributeValues: exprValues,
     })
   );
+
+  // Auto-update leaderboard if the stake is won, paid out, or lost
+  if ((status === "paid" || status === "won" || status === "lost") && userId && actualPayout !== undefined && stakedAmount !== undefined) {
+    const netProfit = actualPayout - stakedAmount;
+    const isWin = status === "paid" || status === "won";
+    
+    // We categorize the leaderboard by year-month and type for future-proofing
+    const now = new Date();
+    const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const leaderboardPk = `LEADERBOARD#BOXOFFICE_MONTHLY#${monthStr}`;
+    const leaderboardSk = `USER#${userId}`;
+
+    await ddb.send(
+      new UpdateCommand({
+        TableName: STAKES_TABLE,
+        Key: { pk: leaderboardPk, sk: leaderboardSk },
+        UpdateExpression: "ADD netProfit :profit, totalWins :win SET userId = :userId, updatedAt = :now",
+        ExpressionAttributeValues: {
+          ":profit": netProfit,
+          ":win": isWin ? 1 : 0,
+          ":userId": userId,
+          ":now": new Date().toISOString(),
+        },
+      })
+    );
+  }
+}
+
+// ─── Leaderboard Operations ──────────────────────
+
+export interface LeaderboardRecord {
+  pk: string;
+  sk: string;
+  userId: string;
+  netProfit: number;
+  totalWins: number;
+  updatedAt: string;
+}
+
+export async function getLeaderboard(
+  type: string,
+  period: string, // e.g., "2026-06"
+  limit: number = 50
+): Promise<LeaderboardRecord[]> {
+  const result = await ddb.send(
+    new QueryCommand({
+      TableName: STAKES_TABLE,
+      KeyConditionExpression: "pk = :pk",
+      ExpressionAttributeValues: { ":pk": `LEADERBOARD#${type}#${period}` },
+    })
+  );
+  
+  const records = (result.Items as LeaderboardRecord[]) || [];
+  // Sort descending by netProfit
+  return records.sort((a, b) => (b.netProfit || 0) - (a.netProfit || 0)).slice(0, limit);
 }
 
 // ─── Rolledge Ledger Integration ─────────────────

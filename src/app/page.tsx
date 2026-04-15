@@ -104,7 +104,7 @@ function GetDAHModal({ onClose, onClaim }: { onClose: () => void; onClaim: () =>
         <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10">
           <Zap className="w-4 h-4 text-amber-400 flex-shrink-0" />
           <p className="text-xs text-slate-400">
-            <span className="text-amber-300 font-medium">Remember:</span> Every DAH you earn today matures into DAHLOR (1 DAHLOR = 1 USD) in 2027.
+            <span className="text-amber-300 font-medium">Remember:</span> Every DAH you earn today matures into DAHLOR (1 DAHLOR = 1 USD) when Mainnet launches in Oct 2026.
           </p>
         </div>
 
@@ -690,10 +690,24 @@ export default function DahBoxHome() {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Leaderboard Link */}
+            <button onClick={(e) => {
+              e.preventDefault();
+              if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+                const urlParams = new URLSearchParams(window.location.search);
+                const screenCode = urlParams.get('screenCode') || "PHONE_MODE";
+                window.parent.postMessage({ type: "DAHBOX_NAVIGATE", screenCode, path: "/leaderboard" }, "*");
+              }
+              window.location.href = "/leaderboard";
+            }} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 transition-all text-blue-300 font-medium text-xs">
+              <Trophy className="w-3.5 h-3.5 text-blue-400" />
+              Leaderboard
+            </button>
+
             {/* DAHLOR maturity teaser */}
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 maturity-badge">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-xs text-amber-300 font-medium">DAHLOR 2027</span>
+              <span className="text-xs text-amber-300 font-medium">Mainnet Oct '26</span>
             </div>
 
             {/* Get DAH CTA */}
@@ -957,7 +971,7 @@ export default function DahBoxHome() {
             <span className="text-3xl font-black text-white">$</span>
           </div>
           <div className="flex-1 text-center md:text-left">
-            <h3 className="text-xl font-bold text-white">DAH → DAHLOR in 2027</h3>
+            <h3 className="text-xl font-bold text-white">DAH → DAHLOR in Oct 2026</h3>
             <p className="text-slate-400 mt-1 text-sm">
               Your DAH tokens will mature into DAHLOR — a USD-pegged stablecoin. 
               Every DAH you earn or buy today becomes real value. Start predicting now to build your balance.

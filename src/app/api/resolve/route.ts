@@ -317,7 +317,14 @@ async function processPayouts(resolutions: MarketResolution[]) {
 
       // Mark losers
       for (const loser of losers) {
-        await updateStakeStatus(loser.pk, loser.sk, 'lost');
+        await updateStakeStatus(
+          loser.pk, 
+          loser.sk, 
+          'lost',
+          0,
+          loser.userId,
+          loser.amount
+        );
       }
 
       // Calculate and distribute payouts to winners
@@ -337,7 +344,14 @@ async function processPayouts(resolutions: MarketResolution[]) {
           `payout:${resolution.marketId}:${resolution.winningOutcomeId}`
         );
 
-        await updateStakeStatus(winner.pk, winner.sk, transfer.success ? 'paid' : 'won', payout);
+        await updateStakeStatus(
+          winner.pk, 
+          winner.sk, 
+          transfer.success ? 'paid' : 'won', 
+          payout,
+          winner.userId,
+          winner.amount
+        );
         transfers.push({ userId: winner.userId, amount: payout, success: transfer.success });
         if (transfer.success) totalPaid += payout;
       }
