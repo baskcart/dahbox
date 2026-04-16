@@ -121,6 +121,7 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
   const [amount, setAmount] = useState(10);
   const [staked, setStaked] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [stakeError, setStakeError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleMsg = (e: MessageEvent) => {
@@ -236,12 +237,20 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
               </div>
             )}
 
+            {/* Stake Error */}
+            {stakeError && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-2.5 text-xs text-red-300">
+                ⚠️ {stakeError}
+              </div>
+            )}
+
             {/* Stake Button */}
             <button
               onClick={() => {
                 const urlParams = new URLSearchParams(window.location.search);
                 const walletUser = urlParams.get('wallet') || "TEST_DEV_USER";
                 setIsProcessing(true);
+                setStakeError(null);
 
                 // 1) Write the Stake to DahBox Backend
                 fetch('/api/stake', {
@@ -262,10 +271,10 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
                   if (!res.ok || !data.success) {
                     throw new Error(data.error || "Stake failed");
                   }
-                  
+
                   setStaked(true);
                   setIsProcessing(false);
-                  
+
                   // 2) If in kiosk mode, sync the visuals with the Memi controller
                   if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
                     const screenCode = urlParams.get('screenCode') || "PHONE_MODE";
@@ -281,7 +290,7 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
                   }
                 }).catch(e => {
                   console.error("Stake failed", e);
-                  alert(`Stake Error: ${e.message}`);
+                  setStakeError(e.message || "Something went wrong. Please try again.");
                   setIsProcessing(false);
                 });
               }}

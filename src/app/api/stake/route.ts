@@ -69,7 +69,10 @@ export async function POST(req: NextRequest) {
     );
 
     if (!transfer.success) {
-      console.warn("Failed to lock DAH in escrow. Proceeding anyway for local beta testing:", transfer.error);
+      return NextResponse.json(
+        { success: false, error: transfer.error || "Failed to lock DAH in escrow" },
+        { status: 402 }
+      );
     }
 
     // Step 3: Calculate potential payout
