@@ -1,22 +1,62 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft, Calendar, BarChart3, Wallet, Zap,
-  Coins, Film, Trophy, Star, X, Sparkles,
-  Gift, CreditCard,
+  ArrowLeft, Calendar, BarChart3,
+  Film, Trophy, Star, Loader2,
 } from 'lucide-react';
 import { Market, formatDAH, getMultiplier } from '../../lib/types';
 import type { TMDBMovieDetail } from '../../lib/tmdb';
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
-// ─── Stake Modal (same as homepage) ──────────────
+// ─── Stake Modal ──────────────────────────────────
+// Staking is owned by Memi. This modal sends STAKE_PLACED to the Memi parent,
+// waits for STAKE_CONFIRMED + transactionId, then records via DahBox /api/stake.
 function StakeModal({ market, onClose }: { market: Market; onClose: () => void }) {
   const [selectedOutcome, setSelectedOutcome] = useState<string | null>(null);
   const [amount, setAmount] = useState(10);
   const [staked, setStaked] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [stakeError, setStakeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleMsg = (e: MessageEvent) => {
+      if (e.data?.type === 'STAKE_CONFIRMED' && e.data?.transactionId) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const walletUser = urlParams.get('wallet') || '';
+        const outcome = market.outcomes.find(o => o.id === selectedOutcome);
+        fetch('/api/stake', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: walletUser,
+            marketId: market.id,
+            outcomeId: selectedOutcome,
+            outcomeLabel: outcome?.label,
+            movieTitle: market.movieTitle,
+            amount,
+            totalPool: market.totalPool,
+            outcomeStaked: outcome?.totalStaked || 0,
+            transactionId: e.data.transactionId,
+          }),
+        }).then(async (res) => {
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.error || 'Failed to record stake');
+          setStaked(true);
+        }).catch(err => {
+          setStakeError(err.message || 'Stake confirmed but failed to record.');
+        }).finally(() => setIsProcessing(false));
+      }
+      if (e.data?.type === 'STAKE_REJECTED') {
+        setIsProcessing(false);
+        setStakeError(e.data?.error || 'Stake rejected. Check your DAH balance.');
+      }
+    };
+    window.addEventListener('message', handleMsg);
+    return () => window.removeEventListener('message', handleMsg);
+  }, [market, selectedOutcome, amount]);
 
   const outcome = market.outcomes.find(o => o.id === selectedOutcome);
   const potentialPayout = outcome
@@ -88,8 +128,37 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
                 <span className="text-lg font-bold text-amber-400">{potentialPayout} DAH</span>
               </div>
             )}
-            <button onClick={() => setStaked(true)} disabled={!selectedOutcome} className="stake-btn w-full py-3 text-center disabled:opacity-30 disabled:cursor-not-allowed">
-              {selectedOutcome ? `Stake ${amount} DAH` : 'Select a prediction'}
+            {stakeError && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-xs text-red-300">
+                ⚠️ {stakeError}
+              </div>
+            )}
+            <button
+              onClick={() => {
+                if (!selectedOutcome || !outcome) return;
+                const urlParams = new URLSearchParams(window.location.search);
+                const screenCode = urlParams.get('screenCode') || 'PHONE_MODE';
+                setIsProcessing(true);
+                setStakeError(null);
+                window.parent.postMessage({
+                  type: 'STAKE_PLACED',
+                  screenCode,
+                  payload: {
+                    amount,
+                    marketId: market.id,
+                    outcomeId: selectedOutcome,
+                    outcomeLabel: outcome.label,
+                    movieTitle: market.movieTitle,
+                    totalPool: market.totalPool,
+                    outcomeStaked: outcome.totalStaked || 0,
+                  },
+                }, '*');
+              }}
+              disabled={!selectedOutcome || isProcessing}
+              className="stake-btn w-full py-3 text-center disabled:opacity-30 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+            >
+              {isProcessing && <Loader2 size={16} className="animate-spin" />}
+              {isProcessing ? 'Processing...' : (selectedOutcome ? `Stake ${amount} DAH` : 'Select a prediction')}
             </button>
           </>
         )}
@@ -109,7 +178,6 @@ export default function MoviePageClient({
   slug: string;
 }) {
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
-  const [dahBalance, setDahBalance] = useState(250);
 
   const releaseDate = movie.release_date
     ? new Date(movie.release_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -132,9 +200,7 @@ export default function MoviePageClient({
             </div>
           </Link>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
-            <Wallet className="w-4 h-4 text-purple-400" />
-            <span className="text-sm font-semibold text-white">{dahBalance}</span>
-            <span className="text-xs text-slate-400">DAH</span>
+            <span className="text-xs text-slate-400">Open in Memi App to stake</span>
           </div>
         </div>
       </header>

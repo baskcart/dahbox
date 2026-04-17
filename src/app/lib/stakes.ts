@@ -43,6 +43,7 @@ export interface StakeRecord {
   actualPayout?: number;
   createdAt: string;
   resolvedAt?: string;
+  transactionId: string; // Rolledge ROLLEDGE_LEDGER transaction_id — the signed ledger entry
 }
 
 // ─── Stake Operations ────────────────────────────

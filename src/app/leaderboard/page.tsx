@@ -6,10 +6,64 @@ import { useRouter } from 'next/navigation';
 import { formatDAH } from '../lib/types';
 import type { LeaderboardRecord } from '../lib/stakes';
 
+const CINEMATIC_COLORS = [
+    { name: "Crimson", h: 350 }, { name: "Ruby", h: 340 }, { name: "Coral", h: 10 },
+    { name: "Amber", h: 35 }, { name: "Golden", h: 45 }, { name: "Yellow", h: 55 },
+    { name: "Lime", h: 90 }, { name: "Neon", h: 110 }, { name: "Emerald", h: 140 },
+    { name: "Mint", h: 160 }, { name: "Teal", h: 175 }, { name: "Cyan", h: 190 },
+    { name: "Azure", h: 205 }, { name: "Sapphire", h: 220 }, { name: "Cobalt", h: 235 },
+    { name: "Indigo", h: 260 }, { name: "Violet", h: 275 }, { name: "Purple", h: 290 },
+    { name: "Magenta", h: 305 }, { name: "Rose", h: 325 }, { name: "Pink", h: 335 }
+];
+
+const CINEMATIC_NOUNS = [
+    "Director", "Producer", "Critic", "Star", "Writer", "Editor", 
+    "Auteur", "Legend", "Icon", "Fanatic", "Cinephile", "Visionary", 
+    "Actor", "Scout", "Mogul", "Extra", "Villain", "Hero", "Sidekick",
+    "Protagonist", "Antagonist", "Maestro", "Savant", "Guru", "Tycoon",
+    "Boss", "Master", "Genius", "Prophet", "Oracle", "Nomad", "Drifter",
+    "Pioneer", "Creator", "Designer", "Animator", "Composer", "Artist"
+];
+
+function generateIdentity(address: string) {
+    if (!address) return { name: "Unknown", color1: "#3b82f6", color2: "#8b5cf6" };
+    let hash = 0;
+    for (let i = 0; i < address.length; i++) {
+        hash = address.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const positiveHash = Math.abs(hash);
+    const colorIndex = positiveHash % CINEMATIC_COLORS.length;
+    const nounIndex = Math.floor(positiveHash / CINEMATIC_COLORS.length) % CINEMATIC_NOUNS.length;
+    
+    // Pick the base color hue precisely from our named color array
+    const baseColor = CINEMATIC_COLORS[colorIndex];
+    const hue1 = baseColor.h;
+    const hue2 = (baseColor.h + 40) % 360; 
+    
+    const baseName = `${baseColor.name} ${CINEMATIC_NOUNS[nounIndex]}`;
+    const discriminator = String(Math.floor(positiveHash / (CINEMATIC_COLORS.length * CINEMATIC_NOUNS.length)) % 10000).padStart(4, '0');
+    
+    return {
+        localName: baseName,
+        tag: `#${discriminator}`,
+        globalName: `${baseName} #${discriminator}`,
+        color1: `hsl(${hue1}, 80%, 60%)`,
+        color2: `hsl(${hue2}, 80%, 40%)`
+    };
+}
+
 export default function LeaderboardPage() {
     const router = useRouter();
     const [leaders, setLeaders] = useState<LeaderboardRecord[]>([]);
     const [loading, setLoading] = useState(true);
+    const [myPublicKey, setMyPublicKey] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            setMyPublicKey(params.get('publicKey'));
+        }
+    }, []);
 
     // Get current month format YYYY-MM
     const now = new Date();
@@ -109,10 +163,11 @@ export default function LeaderboardPage() {
                                 {leaders.map((leader, i) => {
                                     const isTop10 = i < 10;
                                     const isTop3 = i < 3;
+                                    const identity = generateIdentity(leader.userId);
                                     return (
                                         <div key={leader.userId} className={`flex items-center justify-between p-4 transition-colors hover:bg-white/5 ${isTop3 ? 'bg-blue-500/5' : ''}`}>
-                                            <div className="flex items-center gap-4">
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                                            <div className="flex items-center gap-3 md:gap-4">
+                                                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                                                     i === 0 ? 'bg-amber-500 text-black shadow-[0_0_10px_rgba(245,158,11,0.4)]' :
                                                     i === 1 ? 'bg-slate-300 text-black' :
                                                     i === 2 ? 'bg-orange-700 text-white' :
@@ -120,10 +175,25 @@ export default function LeaderboardPage() {
                                                 }`}>
                                                     {i + 1}
                                                 </div>
+                                                <div 
+                                                    className="flex-shrink-0 w-8 h-8 rounded-full shadow-inner border border-white/10"
+                                                    style={{ background: `linear-gradient(135deg, ${identity.color1}, ${identity.color2})` }}
+                                                />
                                                 <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <h4 className="text-sm font-semibold text-white font-mono">{leader.userId.slice(0, 6)}...{leader.userId.slice(-4)}</h4>
-                                                        {isTop10 && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-500/20 text-green-400 uppercase">Prize Zone</span>}
+                                                    <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
+                                                        {leader.userId === myPublicKey ? (
+                                                            <div className="flex items-baseline gap-1.5">
+                                                                <h4 className="text-sm font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-amber-400">You</h4>
+                                                                <span className="text-xs text-white font-semibold">({identity.localName} <span className="text-[10px] text-slate-400 font-normal">{identity.tag}</span>)</span>
+                                                                <span className="text-[10px] text-slate-500 font-mono hidden md:inline ml-1">[{leader.userId.slice(0, 6)}...{leader.userId.slice(-4)}]</span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-baseline gap-1.5">
+                                                                <h4 className="text-sm font-semibold text-white">{identity.localName} <span className="text-slate-400 text-xs font-normal">{identity.tag}</span></h4>
+                                                                <span className="text-[10px] text-slate-500 font-mono hidden md:inline">[{leader.userId.slice(0, 6)}...{leader.userId.slice(-4)}]</span>
+                                                            </div>
+                                                        )}
+                                                        {isTop10 && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-500/20 text-green-400 uppercase whitespace-nowrap">Prize Zone</span>}
                                                     </div>
                                                     <p className="text-xs text-slate-500 mt-0.5">{leader.totalWins || 0} Wins</p>
                                                 </div>

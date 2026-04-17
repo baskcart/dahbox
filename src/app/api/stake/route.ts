@@ -3,15 +3,19 @@ import {
   createStake,
   getStakesForMarket,
   getStakesForUser,
-  transferDAH,
-  fetchDAHBalance,
-  ESCROW_WALLET,
   StakeRecord,
 } from "../../lib/stakes";
 
 /**
- * POST /api/stake — Place a prediction stake
- * 
+ * POST /api/stake — Record a confirmed prediction stake
+ *
+ * This route ONLY records the stake in DAHBOX_STAKES.
+ * The Rolledge ledger transfer (debit from user, credit to market escrow)
+ * is handled by Memi using the user's ML-DSA signing key before this is called.
+ *
+ * DahBox receives STAKE_CONFIRMED + transactionId from Memi via postMessage,
+ * then calls this endpoint to record the result.
+ *
  * Body: {
  *   userId: string (publicKey),
  *   marketId: string,
@@ -21,6 +25,7 @@ import {
  *   amount: number,
  *   totalPool: number,
  *   outcomeStaked: number,
+ *   transactionId: string  — from the real Rolledge transfer
  * }
  */
 export async function POST(req: NextRequest) {
@@ -28,13 +33,20 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const {
       userId, marketId, outcomeId, outcomeLabel,
-      movieTitle, amount, totalPool, outcomeStaked,
+      movieTitle, amount, totalPool, outcomeStaked, transactionId,
     } = body;
 
-    // Validate
+    // Validate required fields
     if (!userId || !marketId || !outcomeId || !amount) {
       return NextResponse.json(
         { success: false, error: "userId, marketId, outcomeId, and amount are required" },
+        { status: 400 }
+      );
+    }
+
+    if (!transactionId) {
+      return NextResponse.json(
+        { success: false, error: "transactionId is required — stake must be pre-confirmed by Memi" },
         { status: 400 }
       );
     }
@@ -46,40 +58,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Step 1: Check balance via Rolledge
-    const balance = await fetchDAHBalance(userId);
-    if (balance < amount) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Insufficient DAH balance",
-          balance,
-          required: amount,
-        },
-        { status: 400 }
-      );
-    }
+    // Calculate potential payout (for display — actual payout settled at resolution)
+    const userShareOfOutcome = amount / ((outcomeStaked || 0) + amount);
+    const potentialPayout = Math.round(userShareOfOutcome * ((totalPool || 0) + amount) * 0.97 * 100) / 100;
 
-    // Step 2: Transfer DAH to escrow via Rolledge
-    const transfer = await transferDAH(
-      userId,
-      ESCROW_WALLET,
-      amount,
-      `stake:${marketId}:${outcomeId}`
-    );
-
-    if (!transfer.success) {
-      return NextResponse.json(
-        { success: false, error: transfer.error || "Failed to lock DAH in escrow" },
-        { status: 402 }
-      );
-    }
-
-    // Step 3: Calculate potential payout
-    const userShareOfOutcome = amount / (outcomeStaked + amount);
-    const potentialPayout = Math.round(userShareOfOutcome * (totalPool + amount) * 0.97 * 100) / 100;
-
-    // Step 4: Record stake in DAHBOX_STAKES
+    // Record stake in DAHBOX_STAKES
     const timestamp = Date.now();
     const stake: StakeRecord = {
       pk: `MARKET#${marketId}`,
@@ -93,11 +76,12 @@ export async function POST(req: NextRequest) {
       status: "active",
       potentialPayout,
       createdAt: new Date().toISOString(),
+      transactionId,  // links to Rolledge ROLLEDGE_LEDGER entry
     };
 
     await createStake(stake);
 
-    console.log(`[Stake] ${userId.slice(0, 12)}... staked ${amount} DAH on "${outcomeLabel}" for "${movieTitle}"`);
+    console.log(`[Stake] ✅ ${userId.slice(0, 12)}... staked ${amount} DAH on "${outcomeLabel}" for "${movieTitle}" | txn: ${transactionId}`);
 
     return NextResponse.json({
       success: true,
@@ -107,9 +91,8 @@ export async function POST(req: NextRequest) {
         outcomeLabel,
         amount,
         potentialPayout,
-        transactionId: transfer.transactionId,
+        transactionId,
       },
-      newBalance: balance - amount,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Stake failed";

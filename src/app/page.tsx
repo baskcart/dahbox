@@ -123,19 +123,44 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
   const [isProcessing, setIsProcessing] = useState(false);
   const [stakeError, setStakeError] = useState<string | null>(null);
 
+  // Memi owns all ledger writes. DahBox records the stake only after
+  // Memi confirms the signed Rolledge transfer succeeded.
   useEffect(() => {
     const handleMsg = (e: MessageEvent) => {
-      if (e.data?.type === 'STAKE_CONFIRMED') {
-        setIsProcessing(false);
-        setStaked(true);
+      if (e.data?.type === 'STAKE_CONFIRMED' && e.data?.transactionId) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const walletUser = urlParams.get('wallet') || '';
+        const outcome = market.outcomes.find(o => o.id === selectedOutcome);
+        fetch('/api/stake', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: walletUser,
+            marketId: market.id,
+            outcomeId: selectedOutcome,
+            outcomeLabel: outcome?.label,
+            movieTitle: market.movieTitle,
+            amount,
+            totalPool: market.totalPool,
+            outcomeStaked: outcome?.totalStaked || 0,
+            transactionId: e.data.transactionId,
+          }),
+        }).then(async (res) => {
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.error || 'Failed to record stake');
+          setStaked(true);
+        }).catch(err => {
+          setStakeError(err.message || 'Stake confirmed but failed to record.');
+        }).finally(() => setIsProcessing(false));
       }
       if (e.data?.type === 'STAKE_REJECTED') {
         setIsProcessing(false);
+        setStakeError(e.data?.error || 'Stake rejected. Check your DAH balance.');
       }
     };
     window.addEventListener('message', handleMsg);
     return () => window.removeEventListener('message', handleMsg);
-  }, []);
+  }, [market, selectedOutcome, amount]);
 
   const outcome = market.outcomes.find(o => o.id === selectedOutcome);
   const potentialPayout = outcome
@@ -247,52 +272,27 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
             {/* Stake Button */}
             <button
               onClick={() => {
+                if (!selectedOutcome || !outcome) return;
                 const urlParams = new URLSearchParams(window.location.search);
-                const walletUser = urlParams.get('wallet') || "TEST_DEV_USER";
+                const screenCode = urlParams.get('screenCode') || 'PHONE_MODE';
                 setIsProcessing(true);
                 setStakeError(null);
-
-                // 1) Write the Stake to DahBox Backend
-                fetch('/api/stake', {
-                  method: 'POST',
-                  headers: {'Content-Type': 'application/json'},
-                  body: JSON.stringify({
-                    userId: walletUser,
+                // Send to Memi — Memi holds the ML-DSA signing key and calls
+                // Rolledge /api/ledger/transfer with a real signature.
+                // DahBox records the stake only after STAKE_CONFIRMED + transactionId.
+                window.parent.postMessage({
+                  type: 'STAKE_PLACED',
+                  screenCode,
+                  payload: {
+                    amount,
                     marketId: market.id,
-                    outcomeId: outcome?.id,
-                    outcomeLabel: outcome?.label,
+                    outcomeId: selectedOutcome,
+                    outcomeLabel: outcome.label,
                     movieTitle: market.movieTitle,
-                    amount: amount,
                     totalPool: market.totalPool,
-                    outcomeStaked: outcome?.totalStaked || 0
-                  })
-                }).then(async (res) => {
-                  const data = await res.json();
-                  if (!res.ok || !data.success) {
-                    throw new Error(data.error || "Stake failed");
-                  }
-
-                  setStaked(true);
-                  setIsProcessing(false);
-
-                  // 2) If in kiosk mode, sync the visuals with the Memi controller
-                  if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
-                    const screenCode = urlParams.get('screenCode') || "PHONE_MODE";
-                    window.parent.postMessage({
-                      type: "STAKE_PLACED",
-                      screenCode,
-                      payload: {
-                        amount: amount,
-                        movie: market.movieTitle,
-                        outcome: outcome?.label
-                      }
-                    }, "*");
-                  }
-                }).catch(e => {
-                  console.error("Stake failed", e);
-                  setStakeError(e.message || "Something went wrong. Please try again.");
-                  setIsProcessing(false);
-                });
+                    outcomeStaked: outcome.totalStaked || 0,
+                  },
+                }, '*');
               }}
               disabled={!selectedOutcome || isProcessing}
               className="stake-btn w-full py-2.5 text-sm font-bold text-center disabled:opacity-30 disabled:cursor-not-allowed flex justify-center items-center gap-2"
