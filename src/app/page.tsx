@@ -1,10 +1,11 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import {
   TrendingUp, Clock, Trophy, Film, ChevronRight,
   Wallet, Zap, BarChart3, Star, Calendar,
   Gift, Coins, CreditCard, X, ArrowRight, Sparkles,
+  Smartphone,
   BookOpen, Gamepad2, CheckCircle2, PlayCircle, Loader2,
 } from 'lucide-react';
 import {
@@ -15,18 +16,11 @@ import { generateMarketsForMovie, generateMarketsForBook, generateMarketsForGame
 import { movieSlug } from './lib/tmdb';
 import { useRouter } from 'next/navigation';
 
-// ─── Constants ───────────────────────────────────
+// --- Constants ---
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
-// ─── Get DAH Modal ───────────────────────────────
-function GetDAHModal({ onClose, onClaim }: { onClose: () => void; onClaim: () => void }) {
-  const [claimed, setClaimed] = useState(false);
-
-  const handleClaim = () => {
-    setClaimed(true);
-    onClaim();
-  };
-
+// --- Get DAH Modal ---
+function GetDAHModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="glass-card max-w-lg w-full p-6 space-y-5" onClick={e => e.stopPropagation()}>
@@ -48,54 +42,44 @@ function GetDAHModal({ onClose, onClaim }: { onClose: () => void; onClaim: () =>
 
         {/* Methods */}
         <div className="space-y-3">
-          {/* Method 1: Daily Bonus */}
+          {/* Method 1: Install dah.mx */}
           <div className="p-4 rounded-xl bg-gradient-to-r from-green-500/10 to-emerald-500/5 border border-green-500/20">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Gift className="w-4 h-4 text-green-400" />
+                <Smartphone className="w-4 h-4 text-green-400" />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <h4 className="text-sm font-semibold text-white">Daily Login Bonus</h4>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-300 font-medium">FREE</span>
+                  <h4 className="text-sm font-semibold text-white">Install dah.mx</h4>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-300 font-medium">EARN DAH</span>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">Earn <span className="text-green-300 font-semibold">10 DAH</span> every day just for logging in. Streak bonuses multiply your rewards up to 5x.</p>
-                {!claimed ? (
-                  <button
-                    onClick={handleClaim}
-                    className="mt-2 text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-500/20 text-green-300 hover:bg-green-500/30 transition-colors flex items-center gap-1"
-                  >
-                    <Sparkles className="w-3 h-3" /> Claim Today&apos;s 10 DAH
-                  </button>
-                ) : (
-                  <p className="mt-2 text-xs font-semibold text-green-400">✓ 10 DAH claimed! Come back tomorrow for more.</p>
-                )}
+                <p className="text-xs text-slate-400 mt-1">Install the <span className="text-green-300 font-semibold">dah.mx</span> app on your phone. You earn DAH when you install and every time you use it at a venue.</p>
               </div>
             </div>
           </div>
 
-          {/* Method 2: Win Predictions */}
+          {/* Method 2: Create */}
           <div className="p-4 rounded-xl bg-gradient-to-r from-purple-500/10 to-violet-500/5 border border-purple-500/20">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Trophy className="w-4 h-4 text-purple-400" />
+                <Sparkles className="w-4 h-4 text-purple-400" />
               </div>
               <div className="flex-1">
-                <h4 className="text-sm font-semibold text-white">Win Predictions</h4>
-                <p className="text-xs text-slate-400 mt-1">Stake DAH on correct outcomes and earn back <span className="text-purple-300 font-semibold">up to 10x</span> your stake. Better odds = bigger payouts when you&apos;re right.</p>
+                <h4 className="text-sm font-semibold text-white">Create</h4>
+                <p className="text-xs text-slate-400 mt-1">Create content within the <span className="text-purple-300 font-semibold">Dahling ecosystem</span> â€” reviews, predictions, event posts. DAH is rewarded for quality contributions.</p>
               </div>
             </div>
           </div>
 
-          {/* Method 3: Purchase */}
+          {/* Method 3: Share */}
           <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 to-orange-500/5 border border-amber-500/20">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <CreditCard className="w-4 h-4 text-amber-400" />
+                <Gift className="w-4 h-4 text-amber-400" />
               </div>
               <div className="flex-1">
-                <h4 className="text-sm font-semibold text-white">Buy DAH</h4>
-                <p className="text-xs text-slate-400 mt-1">Purchase DAH directly through the <span className="text-amber-300 font-semibold">Dahling ecosystem</span>. Accepted at any Dah.fi kiosk or online at dah.ym.</p>
+                <h4 className="text-sm font-semibold text-white">Share</h4>
+                <p className="text-xs text-slate-400 mt-1">Refer friends to <span className="text-amber-300 font-semibold">dah.mx</span>. When they install and use it, you both earn DAH.</p>
               </div>
             </div>
           </div>
@@ -109,13 +93,13 @@ function GetDAHModal({ onClose, onClaim }: { onClose: () => void; onClaim: () =>
           </p>
         </div>
 
-        <button onClick={onClose} className="stake-btn w-full py-3 text-center">Got It — Let&apos;s Predict</button>
+        <button onClick={onClose} className="stake-btn w-full py-3 text-center">Got It &mdash; Let&apos;s Predict</button>
       </div>
     </div>
   );
 }
 
-// ─── Stake Modal ─────────────────────────────────
+// â”€â”€â”€ Stake Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function StakeModal({ market, onClose }: { market: Market; onClose: () => void }) {
   const [selectedOutcome, setSelectedOutcome] = useState<string | null>(null);
   const [amount, setAmount] = useState(10);
@@ -189,7 +173,7 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
         {staked ? (
           /* Success State */
           <div className="text-center py-6 space-y-3">
-            <div className="text-5xl">🎬</div>
+            <div className="text-5xl">ðŸŽ¬</div>
             <h4 className="text-xl font-bold text-white">Position Placed!</h4>
             <p className="text-purple-300">
               {amount} DAH on &ldquo;{outcome?.label}&rdquo;
@@ -265,7 +249,7 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
             {/* Stake Error */}
             {stakeError && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-2.5 text-xs text-red-300">
-                ⚠️ {stakeError}
+                âš ï¸ {stakeError}
               </div>
             )}
 
@@ -277,7 +261,7 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
                 const screenCode = urlParams.get('screenCode') || 'PHONE_MODE';
                 setIsProcessing(true);
                 setStakeError(null);
-                // Send to Memi — Memi holds the ML-DSA signing key and calls
+                // Send to Memi â€” Memi holds the ML-DSA signing key and calls
                 // Rolledge /api/ledger/transfer with a real signature.
                 // DahBox records the stake only after STAKE_CONFIRMED + transactionId.
                 window.parent.postMessage({
@@ -307,7 +291,7 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
   );
 }
 
-// ─── Resolution state type ──────────────────────
+// â”€â”€â”€ Resolution state type â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface MarketResolutionState {
   winningOutcomeId: string;
   winningOutcomeLabel: string;
@@ -315,7 +299,7 @@ interface MarketResolutionState {
   resolvedAt: string;
 }
 
-// ─── Movie Card (groups all markets for one movie) ─
+// â”€â”€â”€ Movie Card (groups all markets for one movie) â”€
 function MovieCard({ markets, onStake, resolutions, onResolve }: {
   markets: Market[];
   onStake: (m: Market) => void;
@@ -367,7 +351,7 @@ function MovieCard({ markets, onStake, resolutions, onResolve }: {
           <span className="text-green-300">{daysLeft}d left</span>
         </div>
 
-        {/* Title overlay — links to SEO page for movies */}
+        {/* Title overlay â€” links to SEO page for movies */}
         {market.mediaType === 'movie' ? (
           <a href={`/movie/${movieSlug(market.movieTitle, market.movieId)}`} className="absolute bottom-3 left-3 right-3 group/title">
             <h3 className="text-white font-bold text-lg leading-tight truncate group-hover/title:text-purple-300 transition-colors">{market.movieTitle}</h3>
@@ -482,50 +466,50 @@ function MovieCard({ markets, onStake, resolutions, onResolve }: {
   );
 }
 
-// ─── Main Page ───────────────────────────────────
+// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // Languages with significant film industries
 const LANGUAGES = [
-  { code: '', label: '🌍 All Languages' },
-  { code: 'en', label: '🇺🇸 English' },
-  { code: 'ko', label: '🇰🇷 Korean' },
-  { code: 'hi', label: '🇮🇳 Hindi' },
-  { code: 'ta', label: '🇮🇳 Tamil' },
-  { code: 'te', label: '🇮🇳 Telugu' },
-  { code: 'ja', label: '🇯🇵 Japanese' },
-  { code: 'zh', label: '🇨🇳 Chinese' },
-  { code: 'es', label: '🇪🇸 Spanish' },
-  { code: 'fr', label: '🇫🇷 French' },
-  { code: 'ar', label: '🇸🇦 Arabic' },
-  { code: 'tl', label: '🇵🇭 Filipino' },
-  { code: 'th', label: '🇹🇭 Thai' },
-  { code: 'id', label: '🇮🇩 Indonesian' },
-  { code: 'tr', label: '🇹🇷 Turkish' },
-  { code: 'pt', label: '🇧🇷 Portuguese' },
-  { code: 'de', label: '🇩🇪 German' },
-  { code: 'it', label: '🇮🇹 Italian' },
+  { code: '', label: 'ðŸŒ All Languages' },
+  { code: 'en', label: 'ðŸ‡ºðŸ‡¸ English' },
+  { code: 'ko', label: 'ðŸ‡°ðŸ‡· Korean' },
+  { code: 'hi', label: 'ðŸ‡®ðŸ‡³ Hindi' },
+  { code: 'ta', label: 'ðŸ‡®ðŸ‡³ Tamil' },
+  { code: 'te', label: 'ðŸ‡®ðŸ‡³ Telugu' },
+  { code: 'ja', label: 'ðŸ‡¯ðŸ‡µ Japanese' },
+  { code: 'zh', label: 'ðŸ‡¨ðŸ‡³ Chinese' },
+  { code: 'es', label: 'ðŸ‡ªðŸ‡¸ Spanish' },
+  { code: 'fr', label: 'ðŸ‡«ðŸ‡· French' },
+  { code: 'ar', label: 'ðŸ‡¸ðŸ‡¦ Arabic' },
+  { code: 'tl', label: 'ðŸ‡µðŸ‡­ Filipino' },
+  { code: 'th', label: 'ðŸ‡¹ðŸ‡­ Thai' },
+  { code: 'id', label: 'ðŸ‡®ðŸ‡© Indonesian' },
+  { code: 'tr', label: 'ðŸ‡¹ðŸ‡· Turkish' },
+  { code: 'pt', label: 'ðŸ‡§ðŸ‡· Portuguese' },
+  { code: 'de', label: 'ðŸ‡©ðŸ‡ª German' },
+  { code: 'it', label: 'ðŸ‡®ðŸ‡¹ Italian' },
 ];
 
 // TMDB genre IDs
 const GENRES = [
-  { id: '', label: '🎬 All Genres' },
-  { id: '28', label: '💥 Action' },
-  { id: '16', label: '🎨 Animation' },
-  { id: '35', label: '😂 Comedy' },
-  { id: '80', label: '🔪 Crime' },
-  { id: '18', label: '🎭 Drama' },
-  { id: '14', label: '🧙 Fantasy' },
-  { id: '27', label: '👻 Horror' },
-  { id: '10402', label: '🎵 Music' },
-  { id: '9648', label: '🕵️ Mystery' },
-  { id: '10749', label: '💕 Romance' },
-  { id: '878', label: '🚀 Sci-Fi' },
-  { id: '53', label: '😰 Thriller' },
-  { id: '10752', label: '⚔️ War' },
-  { id: '12', label: '🗺️ Adventure' },
-  { id: '10751', label: '👨‍👩‍👧 Family' },
-  { id: '36', label: '📜 History' },
-  { id: '99', label: '📹 Documentary' },
+  { id: '', label: 'ðŸŽ¬ All Genres' },
+  { id: '28', label: 'ðŸ’¥ Action' },
+  { id: '16', label: 'ðŸŽ¨ Animation' },
+  { id: '35', label: 'ðŸ˜‚ Comedy' },
+  { id: '80', label: 'ðŸ”ª Crime' },
+  { id: '18', label: 'ðŸŽ­ Drama' },
+  { id: '14', label: 'ðŸ§™ Fantasy' },
+  { id: '27', label: 'ðŸ‘» Horror' },
+  { id: '10402', label: 'ðŸŽµ Music' },
+  { id: '9648', label: 'ðŸ•µï¸ Mystery' },
+  { id: '10749', label: 'ðŸ’• Romance' },
+  { id: '878', label: 'ðŸš€ Sci-Fi' },
+  { id: '53', label: 'ðŸ˜° Thriller' },
+  { id: '10752', label: 'âš”ï¸ War' },
+  { id: '12', label: 'ðŸ—ºï¸ Adventure' },
+  { id: '10751', label: 'ðŸ‘¨â€ðŸ‘©â€ðŸ‘§ Family' },
+  { id: '36', label: 'ðŸ“œ History' },
+  { id: '99', label: 'ðŸ“¹ Documentary' },
 ];
 
 export default function DahBoxHome() {
@@ -534,7 +518,6 @@ export default function DahBoxHome() {
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<MarketCategory | 'all'>('all');
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
-  const [dahBalance, setDahBalance] = useState(250);
   const [showGetDAH, setShowGetDAH] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('');
@@ -711,7 +694,7 @@ export default function DahBoxHome() {
     <div className="min-h-screen relative">
       <div className="cinema-glow" />
 
-      {/* ─── Header ─── */}
+      {/* â”€â”€â”€ Header â”€â”€â”€ */}
       {(!isTvView && !isRemote) && (
       <header className="sticky top-0 z-40 border-b border-white/5" style={{ background: 'rgba(10,10,26,0.85)', backdropFilter: 'blur(20px)' }}>
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -744,18 +727,16 @@ export default function DahBoxHome() {
               Get DAH
             </button>
             
-            {/* Balance */}
+          {/* Balance â€” read from Memi via URL param, not hardcoded */}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
-              <Wallet className="w-4 h-4 text-purple-400" />
-              <span className="text-sm font-semibold text-white">{dahBalance}</span>
-              <span className="text-xs text-slate-400">DAH</span>
+              <span className="text-xs text-slate-400">Open dah.mx to stake</span>
             </div>
           </div>
         </div>
       </header>
       )}
 
-      {/* ─── Hero ─── */}
+      {/* â”€â”€â”€ Hero â”€â”€â”€ */}
       <section className="relative max-w-7xl mx-auto px-4 pt-10 pb-6">
         <div className="text-center space-y-3 fade-in-up">
           <h2 className="text-4xl md:text-5xl font-extrabold text-white">
@@ -784,7 +765,7 @@ export default function DahBoxHome() {
         </div>
       </section>
 
-      {/* ─── Media Type Tabs ─── */}
+      {/* â”€â”€â”€ Media Type Tabs â”€â”€â”€ */}
       {(!isTvView && !isRemote) && (
         <>
       <section className="max-w-7xl mx-auto px-4 pb-3">
@@ -813,7 +794,7 @@ export default function DahBoxHome() {
         </div>
       </section>
 
-      {/* ─── Category Tabs ─── */}
+      {/* â”€â”€â”€ Category Tabs â”€â”€â”€ */}
       <section className="max-w-7xl mx-auto px-4 pb-2">
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {categories.map(cat => {
@@ -844,7 +825,7 @@ export default function DahBoxHome() {
         </>
       )}
 
-      {/* ─── Language & Genre Filters (Movies only) ─── */}
+      {/* â”€â”€â”€ Language & Genre Filters (Movies only) â”€â”€â”€ */}
       {!isTvView && mediaTab === 'movie' && (
       <section className="max-w-7xl mx-auto px-4 pb-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -886,7 +867,7 @@ export default function DahBoxHome() {
       </section>
       )}
 
-      {/* ─── Resolve Toast ─── */}
+      {/* â”€â”€â”€ Resolve Toast â”€â”€â”€ */}
       {resolveToast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-500/20 backdrop-blur-xl border border-green-500/30 rounded-2xl px-6 py-3 flex items-center gap-3 shadow-2xl animate-pulse">
           <CheckCircle2 className="w-5 h-5 text-green-400" />
@@ -894,7 +875,7 @@ export default function DahBoxHome() {
         </div>
       )}
 
-      {/* ─── Markets Grid ─── */}
+      {/* â”€â”€â”€ Markets Grid â”€â”€â”€ */}
       <section className="max-w-7xl mx-auto px-4 pb-20">
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -939,7 +920,7 @@ export default function DahBoxHome() {
         )}
       </section>
 
-      {/* ─── How to Get DAH ─── */}
+      {/* â”€â”€â”€ How to Get DAH â”€â”€â”€ */}
       {(!isTvView && !isRemote) && (
         <>
       <section className="max-w-7xl mx-auto px-4 pb-8">
@@ -949,56 +930,50 @@ export default function DahBoxHome() {
             <h3 className="text-lg font-bold text-white">How to Get DAH</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Way 1 */}
+            {/* Way 1: Install */}
             <div className="p-4 rounded-xl bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-500/15 space-y-2">
               <div className="w-9 h-9 rounded-lg bg-green-500/20 flex items-center justify-center">
-                <Gift className="w-4.5 h-4.5 text-green-400" />
+                <Smartphone className="w-4 h-4 text-green-400" />
               </div>
-              <h4 className="text-sm font-semibold text-white">Daily Login Bonus</h4>
+              <h4 className="text-sm font-semibold text-white">Install dah.mx</h4>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Earn <span className="text-green-300 font-semibold">10 DAH free</span> every day. Build a streak for up to 5x multiplier.
+                Install <span className="text-green-300 font-semibold">dah.mx</span> on your phone and earn DAH every time you use it at a venue.
               </p>
-              <button
-                onClick={() => setShowGetDAH(true)}
-                className="text-xs text-green-300 font-medium flex items-center gap-1 hover:text-green-200 transition-colors mt-1"
-              >
-                Claim Now <ArrowRight className="w-3 h-3" />
-              </button>
             </div>
-            {/* Way 2 */}
+            {/* Way 2: Create */}
             <div className="p-4 rounded-xl bg-gradient-to-br from-purple-500/10 to-violet-500/5 border border-purple-500/15 space-y-2">
               <div className="w-9 h-9 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                <Trophy className="w-4.5 h-4.5 text-purple-400" />
+                <Sparkles className="w-4 h-4 text-purple-400" />
               </div>
-              <h4 className="text-sm font-semibold text-white">Win Predictions</h4>
+              <h4 className="text-sm font-semibold text-white">Create</h4>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Correct predictions pay out <span className="text-purple-300 font-semibold">up to 10x</span> your stake. Higher risk = bigger reward.
+                Create content in the <span className="text-purple-300 font-semibold">Dahling ecosystem</span> and earn DAH for quality contributions.
               </p>
             </div>
-            {/* Way 3 */}
+            {/* Way 3: Share */}
             <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/15 space-y-2">
               <div className="w-9 h-9 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                <CreditCard className="w-4.5 h-4.5 text-amber-400" />
+                <Gift className="w-4 h-4 text-amber-400" />
               </div>
-              <h4 className="text-sm font-semibold text-white">Buy DAH</h4>
+              <h4 className="text-sm font-semibold text-white">Share</h4>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Purchase at any <span className="text-amber-300 font-semibold">Dah.fi kiosk</span> or online at dah.ym within the Dahling ecosystem.
+                Refer friends to <span className="text-amber-300 font-semibold">dah.mx</span>. When they install and check in, you both earn DAH.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ─── DAHLOR Banner ─── */}
+      {/* â”€â”€â”€ DAHLOR Banner â”€â”€â”€ */}
       <section className="max-w-7xl mx-auto px-4 pb-12">
         <div className="glass-card p-6 md:p-8 gold-glow flex flex-col md:flex-row items-center gap-6">
           <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
             <span className="text-3xl font-black text-white">$</span>
           </div>
           <div className="flex-1 text-center md:text-left">
-            <h3 className="text-xl font-bold text-white">DAH → DAHLOR in Oct 2026</h3>
+            <h3 className="text-xl font-bold text-white">DAH â†’ DAHLOR in Oct 2026</h3>
             <p className="text-slate-400 mt-1 text-sm">
-              Your DAH tokens will mature into DAHLOR — a USD-pegged stablecoin. 
+              Your DAH tokens will mature into DAHLOR â€” a USD-pegged stablecoin. 
               Every DAH you earn or buy today becomes real value. Start predicting now to build your balance.
             </p>
           </div>
@@ -1008,20 +983,20 @@ export default function DahBoxHome() {
         </div>
       </section>
 
-      {/* ─── Footer ─── */}
+      {/* â”€â”€â”€ Footer â”€â”€â”€ */}
       <footer className="border-t border-white/5 py-6">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <div className="w-5 h-5 rounded bg-gradient-to-br from-purple-600 to-amber-500 flex items-center justify-center">
               <span className="text-[10px] font-black text-white">D</span>
             </div>
-            <span>DahBox · box.dah.gg</span>
+            <span>DahBox Â· box.dah.gg</span>
           </div>
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <span>Resolution: Box Office Mojo</span>
-            <span>·</span>
+            <span>Â·</span>
             <span>Platform Fee: 3%</span>
-            <span>·</span>
+            <span>Â·</span>
             <a href="https://dah.gg" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors">
               Powered by Dahling Ecosystem
             </a>
@@ -1031,7 +1006,7 @@ export default function DahBoxHome() {
         </>
       )}
 
-      {/* ─── Floating Leaderboard Button ─── */}
+      {/* â”€â”€â”€ Floating Leaderboard Button â”€â”€â”€ */}
       <button 
         onClick={(e) => {
           e.preventDefault();
@@ -1047,18 +1022,18 @@ export default function DahBoxHome() {
         <Trophy className="w-6 h-6" />
       </button>
 
-      {/* ─── Stake Modal ─── */}
+      {/* â”€â”€â”€ Stake Modal â”€â”€â”€ */}
       {selectedMarket && (
         <StakeModal market={selectedMarket} onClose={() => setSelectedMarket(null)} />
       )}
 
-      {/* ─── Get DAH Modal ─── */}
+      {/* â”€â”€â”€ Get DAH Modal â”€â”€â”€ */}
       {showGetDAH && (
         <GetDAHModal
           onClose={() => setShowGetDAH(false)}
-          onClaim={() => setDahBalance(prev => prev + 10)}
         />
       )}
     </div>
   );
 }
+
