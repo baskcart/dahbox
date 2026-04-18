@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
@@ -49,6 +50,15 @@ function getDb(): DynamoDBDocumentClient {
 // ─── Test helper (resets lazy client — for integration tests) ───
 export function _resetDbClient(): void {
   _ddb = null;
+}
+
+/**
+ * Hash a userId (ML-DSA public key, potentially thousands of bytes) to a
+ * 32-char hex string safe for DynamoDB sort keys (limit: 1024 bytes).
+ * The full userId is always stored in the item body.
+ */
+function hashUserId(userId: string): string {
+  return createHash("sha256").update(userId).digest("hex").slice(0, 32);
 }
 
 // ─── Types ───────────────────────────────────────
@@ -187,7 +197,7 @@ export async function updateStakeStatus(
     const now = new Date();
     const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     const leaderboardPk = `LEADERBOARD#BOXOFFICE_MONTHLY#${monthStr}`;
-    const leaderboardSk = `USER#${userId}`;
+    const leaderboardSk = `USER#${hashUserId(userId)}`;
 
     await getDb().send(
       new UpdateCommand({

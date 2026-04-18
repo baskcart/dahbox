@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
   createStake,
@@ -23,6 +24,15 @@ function corsHeaders(req: NextRequest): Record<string, string> {
     "Access-Control-Allow-Methods": "POST, PATCH, DELETE, GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
+}
+
+/**
+ * Hash a userId (potentially a long ML-DSA public key) to a short hex string
+ * safe for use in DynamoDB sort keys (limit: 1024 bytes).
+ * Full userId is preserved in the item body for auditing/querying.
+ */
+function hashUserId(userId: string): string {
+  return createHash("sha256").update(userId).digest("hex").slice(0, 32);
 }
 
 export async function OPTIONS(req: NextRequest) {
@@ -66,7 +76,10 @@ export async function POST(req: NextRequest) {
 
     const timestamp = Date.now();
     const pk = `MARKET#${marketId}`;
-    const sk = `STAKE#${userId}#${timestamp}`;
+    // Use a hash of userId in the sk to stay within DynamoDB's 1024-byte sort key limit.
+    // The full userId is stored in the item body for auditing and GSI queries.
+    const userIdHash = hashUserId(userId);
+    const sk = `STAKE#${userIdHash}#${timestamp}`;
 
     const stake: StakeRecord = {
       pk,
