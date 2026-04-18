@@ -1,10 +1,10 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import {
-  TrendingUp, Clock, Trophy, Film, ChevronRight,
-  Wallet, Zap, BarChart3, Star, Calendar,
-  Gift, Coins, CreditCard, X, ArrowRight, Sparkles,
+  TrendingUp, Trophy, Film, ChevronRight,
+  Zap, BarChart3, Star, Calendar,
+  Coins, X, Sparkles,
   Smartphone,
   BookOpen, Gamepad2, CheckCircle2, PlayCircle, Loader2,
 } from 'lucide-react';
@@ -19,6 +19,43 @@ import { useRouter } from 'next/navigation';
 // --- Constants ---
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
+// ─── Overlay real pool data from DAHBOX_STAKES ───
+// Called after markets are generated so all totalPool / totalStaked values
+// reflect actual stakes instead of the 0-initialised defaults in markets.ts.
+type PoolTotals = Record<string, {
+  totalPool: number;
+  outcomeTotals: Record<string, number>;
+}>;
+
+function overlayRealPoolData(markets: Market[], totals: PoolTotals): Market[] {
+  return markets.map((m) => {
+    const poolData = totals[m.id];
+    if (!poolData) return m; // no stakes yet — keep zeros
+    const totalPool = poolData.totalPool;
+    const outcomes = m.outcomes.map((o) => {
+      const staked = poolData.outcomeTotals[o.id] || 0;
+      return {
+        ...o,
+        totalStaked: staked,
+        impliedOdds: totalPool > 0 ? staked / totalPool : o.impliedOdds,
+      };
+    });
+    return { ...m, totalPool, outcomes };
+  });
+}
+
+async function fetchRealPoolTotals(marketIds: string[]): Promise<PoolTotals> {
+  if (marketIds.length === 0) return {};
+  try {
+    const res = await fetch(`/api/stake/totals?marketIds=${encodeURIComponent(marketIds.join(','))}`);
+    if (!res.ok) return {};
+    const data = await res.json();
+    return data.success ? data.totals : {};
+  } catch {
+    return {}; // degrade gracefully — UI shows 0 DAH pool which is honest
+  }
+}
+
 // --- Get DAH Modal ---
 function GetDAHModal({ onClose }: { onClose: () => void }) {
   return (
@@ -32,7 +69,7 @@ function GetDAHModal({ onClose }: { onClose: () => void }) {
             </div>
             <div>
               <h3 className="text-lg font-bold text-white">Get DAH Tokens</h3>
-              <p className="text-xs text-slate-400">Three ways to fill your wallet</p>
+              <p className="text-xs text-slate-400">Two ways to earn DAH</p>
             </div>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
@@ -42,7 +79,7 @@ function GetDAHModal({ onClose }: { onClose: () => void }) {
 
         {/* Methods */}
         <div className="space-y-3">
-          {/* Method 1: Install dah.mx */}
+          {/* Method 1: Install / Bookmark / Add to Home Screen */}
           <div className="p-4 rounded-xl bg-gradient-to-r from-green-500/10 to-emerald-500/5 border border-green-500/20">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -50,36 +87,23 @@ function GetDAHModal({ onClose }: { onClose: () => void }) {
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <h4 className="text-sm font-semibold text-white">Install dah.mx</h4>
+                  <h4 className="text-sm font-semibold text-white">Install the App</h4>
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-300 font-medium">EARN DAH</span>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">Install the <span className="text-green-300 font-semibold">dah.mx</span> app on your phone. You earn DAH when you install and every time you use it at a venue.</p>
+                <p className="text-xs text-slate-400 mt-1">Visit <span className="text-green-300 font-semibold">dah.mx</span> on your phone. Install the app, bookmark it, or add it to your Home Screen. You earn DAH every time you use it at a venue.</p>
               </div>
             </div>
           </div>
 
-          {/* Method 2: Create */}
+          {/* Method 2: Create & Share Games */}
           <div className="p-4 rounded-xl bg-gradient-to-r from-purple-500/10 to-violet-500/5 border border-purple-500/20">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                 <Sparkles className="w-4 h-4 text-purple-400" />
               </div>
               <div className="flex-1">
-                <h4 className="text-sm font-semibold text-white">Create</h4>
-                <p className="text-xs text-slate-400 mt-1">Create content within the <span className="text-purple-300 font-semibold">Dahling ecosystem</span> â€” reviews, predictions, event posts. DAH is rewarded for quality contributions.</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Method 3: Share */}
-          <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 to-orange-500/5 border border-amber-500/20">
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Gift className="w-4 h-4 text-amber-400" />
-              </div>
-              <div className="flex-1">
-                <h4 className="text-sm font-semibold text-white">Share</h4>
-                <p className="text-xs text-slate-400 mt-1">Refer friends to <span className="text-amber-300 font-semibold">dah.mx</span>. When they install and use it, you both earn DAH.</p>
+                <h4 className="text-sm font-semibold text-white">Create &amp; Share Games</h4>
+                <p className="text-xs text-slate-400 mt-1">Build trivia, Smarty, or Charades games in the <span className="text-purple-300 font-semibold">Dahling ecosystem</span>. Share them â€” DAH is rewarded each time your game is played at a venue.</p>
               </div>
             </div>
           </div>
@@ -107,35 +131,14 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
   const [isProcessing, setIsProcessing] = useState(false);
   const [stakeError, setStakeError] = useState<string | null>(null);
 
-  // Memi owns all ledger writes. DahBox records the stake only after
-  // Memi confirms the signed Rolledge transfer succeeded.
+  // Memi owns all ledger writes AND stake recording.
+  // STAKE_CONFIRMED is only sent after both the Rolledge debit AND
+  // the DahBox /api/stake record have succeeded — show success directly.
   useEffect(() => {
     const handleMsg = (e: MessageEvent) => {
       if (e.data?.type === 'STAKE_CONFIRMED' && e.data?.transactionId) {
-        const urlParams = new URLSearchParams(window.location.search);
-        const walletUser = urlParams.get('wallet') || '';
-        const outcome = market.outcomes.find(o => o.id === selectedOutcome);
-        fetch('/api/stake', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: walletUser,
-            marketId: market.id,
-            outcomeId: selectedOutcome,
-            outcomeLabel: outcome?.label,
-            movieTitle: market.movieTitle,
-            amount,
-            totalPool: market.totalPool,
-            outcomeStaked: outcome?.totalStaked || 0,
-            transactionId: e.data.transactionId,
-          }),
-        }).then(async (res) => {
-          const data = await res.json();
-          if (!res.ok || !data.success) throw new Error(data.error || 'Failed to record stake');
-          setStaked(true);
-        }).catch(err => {
-          setStakeError(err.message || 'Stake confirmed but failed to record.');
-        }).finally(() => setIsProcessing(false));
+        setStaked(true);
+        setIsProcessing(false);
       }
       if (e.data?.type === 'STAKE_REJECTED') {
         setIsProcessing(false);
@@ -144,7 +147,7 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
     };
     window.addEventListener('message', handleMsg);
     return () => window.removeEventListener('message', handleMsg);
-  }, [market, selectedOutcome, amount]);
+  }, []);
 
   const outcome = market.outcomes.find(o => o.id === selectedOutcome);
   const potentialPayout = outcome
@@ -249,7 +252,7 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
             {/* Stake Error */}
             {stakeError && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-2.5 text-xs text-red-300">
-                âš ï¸ {stakeError}
+                <span className="font-semibold mr-1">Error:</span>{stakeError}
               </div>
             )}
 
@@ -595,7 +598,9 @@ export default function DahBoxHome() {
             for (const movie of topMovies) {
               allMarkets.push(...generateMarketsForMovie(movie));
             }
-            setMarkets(allMarkets);
+            const mIds = allMarkets.map(m => m.id);
+            const totals = await fetchRealPoolTotals(mIds);
+            setMarkets(overlayRealPoolData(allMarkets, totals));
             return;
           }
           setMarkets([]);
@@ -613,7 +618,9 @@ export default function DahBoxHome() {
             for (const book of topBooks) {
               allMarkets.push(...generateMarketsForBook(book));
             }
-            setMarkets(allMarkets);
+            const mIds = allMarkets.map(m => m.id);
+            const totals = await fetchRealPoolTotals(mIds);
+            setMarkets(overlayRealPoolData(allMarkets, totals));
             return;
           }
           setMarkets([]);
@@ -631,7 +638,9 @@ export default function DahBoxHome() {
             for (const game of topGames) {
               allMarkets.push(...generateMarketsForGame(game));
             }
-            setMarkets(allMarkets);
+            const mIds = allMarkets.map(m => m.id);
+            const totals = await fetchRealPoolTotals(mIds);
+            setMarkets(overlayRealPoolData(allMarkets, totals));
             return;
           }
           setMarkets([]);
@@ -727,10 +736,7 @@ export default function DahBoxHome() {
               Get DAH
             </button>
             
-          {/* Balance â€” read from Memi via URL param, not hardcoded */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
-              <span className="text-xs text-slate-400">Open dah.mx to stake</span>
-            </div>
+          
           </div>
         </div>
       </header>
@@ -929,8 +935,8 @@ export default function DahBoxHome() {
             <Coins className="w-5 h-5 text-purple-400" />
             <h3 className="text-lg font-bold text-white">How to Get DAH</h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Way 1: Install */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Way 1: Install / Bookmark / Add to Home Screen */}
             <div className="p-4 rounded-xl bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-500/15 space-y-2">
               <div className="w-9 h-9 rounded-lg bg-green-500/20 flex items-center justify-center">
                 <Smartphone className="w-4 h-4 text-green-400" />
@@ -940,24 +946,14 @@ export default function DahBoxHome() {
                 Install <span className="text-green-300 font-semibold">dah.mx</span> on your phone and earn DAH every time you use it at a venue.
               </p>
             </div>
-            {/* Way 2: Create */}
+            {/* Way 2: Create & Share Games */}
             <div className="p-4 rounded-xl bg-gradient-to-br from-purple-500/10 to-violet-500/5 border border-purple-500/15 space-y-2">
               <div className="w-9 h-9 rounded-lg bg-purple-500/20 flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-purple-400" />
               </div>
-              <h4 className="text-sm font-semibold text-white">Create</h4>
+              <h4 className="text-sm font-semibold text-white">Create &amp; Share Games</h4>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Create content in the <span className="text-purple-300 font-semibold">Dahling ecosystem</span> and earn DAH for quality contributions.
-              </p>
-            </div>
-            {/* Way 3: Share */}
-            <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/15 space-y-2">
-              <div className="w-9 h-9 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                <Gift className="w-4 h-4 text-amber-400" />
-              </div>
-              <h4 className="text-sm font-semibold text-white">Share</h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Refer friends to <span className="text-amber-300 font-semibold">dah.mx</span>. When they install and check in, you both earn DAH.
+                Build games in the <span className="text-purple-300 font-semibold">Dahling ecosystem</span> and share them. Earn DAH every time your game is played at a venue.
               </p>
             </div>
           </div>
@@ -1036,4 +1032,3 @@ export default function DahBoxHome() {
     </div>
   );
 }
-

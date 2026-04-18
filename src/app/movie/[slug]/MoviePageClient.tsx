@@ -23,31 +23,10 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
 
   useEffect(() => {
     const handleMsg = (e: MessageEvent) => {
+      // Memi records the stake before sending STAKE_CONFIRMED — just show success.
       if (e.data?.type === 'STAKE_CONFIRMED' && e.data?.transactionId) {
-        const urlParams = new URLSearchParams(window.location.search);
-        const walletUser = urlParams.get('wallet') || '';
-        const outcome = market.outcomes.find(o => o.id === selectedOutcome);
-        fetch('/api/stake', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: walletUser,
-            marketId: market.id,
-            outcomeId: selectedOutcome,
-            outcomeLabel: outcome?.label,
-            movieTitle: market.movieTitle,
-            amount,
-            totalPool: market.totalPool,
-            outcomeStaked: outcome?.totalStaked || 0,
-            transactionId: e.data.transactionId,
-          }),
-        }).then(async (res) => {
-          const data = await res.json();
-          if (!res.ok || !data.success) throw new Error(data.error || 'Failed to record stake');
-          setStaked(true);
-        }).catch(err => {
-          setStakeError(err.message || 'Stake confirmed but failed to record.');
-        }).finally(() => setIsProcessing(false));
+        setStaked(true);
+        setIsProcessing(false);
       }
       if (e.data?.type === 'STAKE_REJECTED') {
         setIsProcessing(false);
@@ -56,7 +35,7 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
     };
     window.addEventListener('message', handleMsg);
     return () => window.removeEventListener('message', handleMsg);
-  }, [market, selectedOutcome, amount]);
+  }, []);
 
   const outcome = market.outcomes.find(o => o.id === selectedOutcome);
   const potentialPayout = outcome

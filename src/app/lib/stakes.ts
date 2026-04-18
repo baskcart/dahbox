@@ -11,18 +11,23 @@ const ROLLEDGE_API = process.env.ROLLEDGE_API_URL || "https://rolledge.dah.gg";
 const ESCROW_WALLET = process.env.DAHBOX_ESCROW_WALLET || "DAHBOX_ESCROW";
 
 // ─── DynamoDB Client ─────────────────────────────
+// Production: DahBox Lambda execution role has DynamoDB access via inline IAM policy.
+// No explicit credentials needed — the role credential chain is used automatically.
+// Local dev: set CUSTOM_AWS_ACCESS_KEY_ID + CUSTOM_AWS_SECRET_ACCESS_KEY in .env.local.
 
 const clientConfig: Record<string, unknown> = {
   region: process.env.AWS_REGION || "us-east-1",
 };
 
-const accessKeyId =
-  process.env.CUSTOM_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
-const secretAccessKey =
-  process.env.CUSTOM_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+const localAccessKeyId = process.env.CUSTOM_AWS_ACCESS_KEY_ID;
+const localSecretAccessKey = process.env.CUSTOM_AWS_SECRET_ACCESS_KEY;
 
-if (accessKeyId && secretAccessKey) {
-  clientConfig.credentials = { accessKeyId, secretAccessKey };
+// Only apply explicit credentials if BOTH are set and look like real AWS keys (AKIA...)
+if (localAccessKeyId?.startsWith("AKIA") && localSecretAccessKey) {
+  clientConfig.credentials = {
+    accessKeyId: localAccessKeyId,
+    secretAccessKey: localSecretAccessKey,
+  };
 }
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig));

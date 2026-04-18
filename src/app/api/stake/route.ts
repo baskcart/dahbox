@@ -6,6 +6,29 @@ import {
   StakeRecord,
 } from "../../lib/stakes";
 
+// CORS: allow Memi (dah.mx) to call /api/stake cross-origin.
+// Security is provided by the transactionId requirement — only real
+// Rolledge-confirmed transfers produce a valid transactionId.
+const ALLOWED_ORIGINS = [
+  "https://dah.mx",
+  "https://www.dah.mx",
+  process.env.NEXT_PUBLIC_MEMI_URL,
+].filter(Boolean);
+
+function corsHeaders(req: NextRequest): Record<string, string> {
+  const origin = req.headers.get("origin") || "";
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : (ALLOWED_ORIGINS[0] ?? "https://dah.mx");
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+}
+
+export async function OPTIONS(req: NextRequest) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
+}
+
 /**
  * POST /api/stake — Record a confirmed prediction stake
  *
@@ -93,11 +116,11 @@ export async function POST(req: NextRequest) {
         potentialPayout,
         transactionId,
       },
-    });
+    }, { headers: corsHeaders(req) });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Stake failed";
     console.error("[Stake] Error:", message);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: message }, { status: 500, headers: corsHeaders(req) });
   }
 }
 
