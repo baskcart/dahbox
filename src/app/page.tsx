@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   TrendingUp, Trophy, Film, ChevronRight,
   Zap, BarChart3, Star, Calendar,
@@ -176,7 +176,7 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
         {staked ? (
           /* Success State */
           <div className="text-center py-6 space-y-3">
-            <div className="text-5xl">ðŸŽ¬</div>
+            <div className="text-5xl">🎬</div>
             <h4 className="text-xl font-bold text-white">Position Placed!</h4>
             <p className="text-purple-300">
               {amount} DAH on &ldquo;{outcome?.label}&rdquo;
@@ -311,7 +311,11 @@ function MovieCard({ markets, onStake, resolutions, onResolve }: {
 }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const market = markets[activeIdx];
-  const daysLeft = Math.max(0, Math.ceil((new Date(market.closesAt).getTime() - Date.now()) / 86400000));
+  const daysLeft = useMemo(
+    // eslint-disable-next-line react-hooks/purity -- Date.now() inside useMemo is safe; not called on every render
+    () => Math.max(0, Math.ceil((new Date(market.closesAt).getTime() - Date.now()) / 86400000)),
+    [market.closesAt]
+  );
   const catConfig = MARKET_CATEGORIES[market.category];
 
   // Market type labels for tabs
@@ -473,47 +477,50 @@ function MovieCard({ markets, onStake, resolutions, onResolve }: {
 
 // Languages with significant film industries
 const LANGUAGES = [
-  { code: '', label: 'ðŸŒ All Languages' },
-  { code: 'en', label: 'ðŸ‡ºðŸ‡¸ English' },
-  { code: 'ko', label: 'ðŸ‡°ðŸ‡· Korean' },
-  { code: 'hi', label: 'ðŸ‡®ðŸ‡³ Hindi' },
-  { code: 'ta', label: 'ðŸ‡®ðŸ‡³ Tamil' },
-  { code: 'te', label: 'ðŸ‡®ðŸ‡³ Telugu' },
-  { code: 'ja', label: 'ðŸ‡¯ðŸ‡µ Japanese' },
-  { code: 'zh', label: 'ðŸ‡¨ðŸ‡³ Chinese' },
-  { code: 'es', label: 'ðŸ‡ªðŸ‡¸ Spanish' },
-  { code: 'fr', label: 'ðŸ‡«ðŸ‡· French' },
-  { code: 'ar', label: 'ðŸ‡¸ðŸ‡¦ Arabic' },
-  { code: 'tl', label: 'ðŸ‡µðŸ‡­ Filipino' },
-  { code: 'th', label: 'ðŸ‡¹ðŸ‡­ Thai' },
-  { code: 'id', label: 'ðŸ‡®ðŸ‡© Indonesian' },
-  { code: 'tr', label: 'ðŸ‡¹ðŸ‡· Turkish' },
-  { code: 'pt', label: 'ðŸ‡§ðŸ‡· Portuguese' },
-  { code: 'de', label: 'ðŸ‡©ðŸ‡ª German' },
-  { code: 'it', label: 'ðŸ‡®ðŸ‡¹ Italian' },
+  { code: '', label: '\uD83C\uDF0D All Languages' },
+  { code: 'en', label: '\uD83C\uDDFA\uD83C\uDDF8 English' },
+  { code: 'ko', label: '\uD83C\uDDF0\uD83C\uDDF7 Korean' },
+  { code: 'hi', label: '\uD83C\uDDEE\uD83C\uDDF3 Hindi' },
+  { code: 'ta', label: '\uD83C\uDDEE\uD83C\uDDF3 Tamil' },
+  { code: 'te', label: '\uD83C\uDDEE\uD83C\uDDF3 Telugu' },
+  { code: 'ja', label: '\uD83C\uDDEF\uD83C\uDDF5 Japanese' },
+  { code: 'zh', label: '\uD83C\uDDE8\uD83C\uDDF3 Chinese' },
+  { code: 'es', label: '\uD83C\uDDEA\uD83C\uDDF8 Spanish' },
+  { code: 'fr', label: '\uD83C\uDDEB\uD83C\uDDF7 French' },
+  { code: 'ar', label: '\uD83C\uDDF8\uD83C\uDDE6 Arabic' },
+  { code: 'tl', label: '\uD83C\uDDF5\uD83C\uDDED Filipino' },
+  { code: 'th', label: '\uD83C\uDDF9\uD83C\uDDED Thai' },
+  { code: 'id', label: '\uD83C\uDDEE\uD83C\uDDE9 Indonesian' },
+  { code: 'tr', label: '\uD83C\uDDF9\uD83C\uDDF7 Turkish' },
+  { code: 'pt', label: '\uD83C\uDDE7\uD83C\uDDF7 Portuguese' },
+  { code: 'de', label: '\uD83C\uDDE9\uD83C\uDDEA German' },
+  { code: 'it', label: '\uD83C\uDDEE\uD83C\uDDF9 Italian' },
 ];
+
+
 
 // TMDB genre IDs
 const GENRES = [
-  { id: '', label: 'ðŸŽ¬ All Genres' },
-  { id: '28', label: 'ðŸ’¥ Action' },
-  { id: '16', label: 'ðŸŽ¨ Animation' },
-  { id: '35', label: 'ðŸ˜‚ Comedy' },
-  { id: '80', label: 'ðŸ”ª Crime' },
-  { id: '18', label: 'ðŸŽ­ Drama' },
-  { id: '14', label: 'ðŸ§™ Fantasy' },
-  { id: '27', label: 'ðŸ‘» Horror' },
-  { id: '10402', label: 'ðŸŽµ Music' },
-  { id: '9648', label: 'ðŸ•µï¸ Mystery' },
-  { id: '10749', label: 'ðŸ’• Romance' },
-  { id: '878', label: 'ðŸš€ Sci-Fi' },
-  { id: '53', label: 'ðŸ˜° Thriller' },
-  { id: '10752', label: 'âš”ï¸ War' },
-  { id: '12', label: 'ðŸ—ºï¸ Adventure' },
-  { id: '10751', label: 'ðŸ‘¨â€ðŸ‘©â€ðŸ‘§ Family' },
-  { id: '36', label: 'ðŸ“œ History' },
-  { id: '99', label: 'ðŸ“¹ Documentary' },
+  { id: '', label: '\uD83C\uDFAC All Genres' },
+  { id: '28', label: '\uD83D\uDCA5 Action' },
+  { id: '16', label: '\uD83C\uDFA8 Animation' },
+  { id: '35', label: '\uD83D\uDE02 Comedy' },
+  { id: '80', label: '\uD83D\uDD2A Crime' },
+  { id: '18', label: '\uD83C\uDFAD Drama' },
+  { id: '14', label: '\uD83E\uDDD9 Fantasy' },
+  { id: '27', label: '\uD83D\uDC7B Horror' },
+  { id: '10402', label: '\uD83C\uDFB5 Music' },
+  { id: '9648', label: '\uD83D\uDD75\uFE0F Mystery' },
+  { id: '10749', label: '\uD83D\uDC95 Romance' },
+  { id: '878', label: '\uD83D\uDE80 Sci-Fi' },
+  { id: '53', label: '\uD83D\uDE30 Thriller' },
+  { id: '10752', label: '\u2694\uFE0F War' },
+  { id: '12', label: '\uD83D\uDDFA\uFE0F Adventure' },
+  { id: '10751', label: '\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67 Family' },
+  { id: '36', label: '\uD83D\uDCDC History' },
+  { id: '99', label: '\uD83D\uDCF9 Documentary' },
 ];
+
 
 export default function DahBoxHome() {
   const router = useRouter();
@@ -724,7 +731,7 @@ export default function DahBoxHome() {
             {/* DAHLOR maturity teaser */}
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 maturity-badge">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-xs text-amber-300 font-medium">Mainnet Oct '26</span>
+              <span className="text-xs text-amber-300 font-medium">Mainnet Oct &apos;26</span>
             </div>
 
             {/* Get DAH CTA */}

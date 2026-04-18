@@ -50,7 +50,21 @@ export async function GET(req: NextRequest) {
 
     const data = await response.json();
 
-    const books = (data.items || []).map((item: any) => ({
+    interface GoogleBookItem {
+      id: string;
+      volumeInfo?: {
+        title?: string;
+        authors?: string[];
+        description?: string;
+        imageLinks?: { thumbnail?: string };
+        publishedDate?: string;
+        categories?: string[];
+        averageRating?: number;
+        ratingsCount?: number;
+        pageCount?: number;
+      };
+    }
+    const books = (data.items || []).map((item: GoogleBookItem) => ({
       id: item.id,
       title: item.volumeInfo?.title || 'Untitled',
       authors: item.volumeInfo?.authors || ['Unknown'],

@@ -20,11 +20,18 @@ interface TMDBMovieDetail {
   status: string;        // "Released", "Post Production", etc.
 }
 
-interface ResolutionResult {
-  movieId: number;
-  movieTitle: string;
-  mode: 'simulate' | 'real';
-  markets: MarketResolution[];
+interface MarketInput {
+  id: string;
+  question: string;
+  movieTitle?: string;
+  category?: string;
+  outcomes?: OutcomeInput[];
+}
+
+interface OutcomeInput {
+  id: string;
+  label: string;
+  totalStaked: number;
 }
 
 interface MarketResolution {
@@ -70,7 +77,7 @@ export async function POST(req: NextRequest) {
 /**
  * SIMULATE mode: randomly pick winners weighted by pool distribution
  */
-async function handleSimulatedResolution(movieId: number, markets: any[]) {
+async function handleSimulatedResolution(movieId: number, markets: MarketInput[]) {
   const resolutions: MarketResolution[] = [];
 
   for (const market of markets) {
@@ -78,7 +85,7 @@ async function handleSimulatedResolution(movieId: number, markets: any[]) {
     if (outcomes.length === 0) continue;
 
     // Weighted random selection based on staked amounts (higher staked = more likely)
-    const totalStaked = outcomes.reduce((s: number, o: any) => s + o.totalStaked, 0);
+    const totalStaked = outcomes.reduce((s: number, o: OutcomeInput) => s + o.totalStaked, 0);
     let roll = Math.random() * totalStaked;
     let winner = outcomes[0];
 
@@ -138,7 +145,7 @@ async function handleSimulatedResolution(movieId: number, markets: any[]) {
 /**
  * REAL mode: fetch TMDB data and determine actual winners
  */
-async function handleRealResolution(movieId: number, markets: any[]) {
+async function handleRealResolution(movieId: number, markets: MarketInput[]) {
   // Fetch movie details from TMDB
   const res = await fetch(`${TMDB_BASE}/movie/${movieId}`, {
     headers: {
@@ -192,7 +199,7 @@ async function handleRealResolution(movieId: number, markets: any[]) {
       if (lineMatch) {
         const line = parseInt(lineMatch[1]);
         const isOver = owMillions >= line;
-        const winner = outcomes.find((o: any) => 
+        const winner = outcomes.find((o: OutcomeInput) => 
           isOver ? o.label.includes('Over') : o.label.includes('Under')
         );
         if (winner) {

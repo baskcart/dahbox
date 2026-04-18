@@ -75,7 +75,6 @@ export async function GET(req: NextRequest) {
       games: data.results || [],
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch games';
     console.error('RAWG error:', err);
     // Fallback to curated list
     return NextResponse.json({
