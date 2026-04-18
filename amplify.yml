@@ -1,0 +1,25 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci --cache .npm --prefer-offline
+    build:
+      commands:
+        # Echo server-side credentials into .env.production.local so Next.js
+        # embeds them in the SSR Lambda bundle at build time.
+        # This is necessary because Amplify WEB_COMPUTE only guarantees these
+        # env vars during the build shell, not in the Lambda runtime.
+        - echo "CUSTOM_AWS_ACCESS_KEY_ID=$CUSTOM_AWS_ACCESS_KEY_ID" >> .env.production.local
+        - echo "CUSTOM_AWS_SECRET_ACCESS_KEY=$CUSTOM_AWS_SECRET_ACCESS_KEY" >> .env.production.local
+        - echo "DAHBOX_STAKES_TABLE=${DAHBOX_STAKES_TABLE:-DAHBOX_STAKES}" >> .env.production.local
+        - echo "ROLLEDGE_API_URL=$ROLLEDGE_API_URL" >> .env.production.local
+        - npm run build
+  artifacts:
+    baseDirectory: .next
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - .next/cache/**/*
+      - .npm/**/*
