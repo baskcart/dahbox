@@ -10,25 +10,37 @@ const STAKES_TABLE = process.env.DAHBOX_STAKES_TABLE || "DAHBOX_STAKES";
 const ROLLEDGE_API = process.env.ROLLEDGE_API_URL || "https://rolledge.dah.gg";
 const ESCROW_WALLET = process.env.DAHBOX_ESCROW_WALLET || "DAHBOX_ESCROW";
 
-// ─── DynamoDB Client ─────────────────────────────
-// Production: credentials injected via CUSTOM_AWS_ACCESS_KEY_ID / CUSTOM_AWS_SECRET_ACCESS_KEY
-// in Amplify env vars (use rolledge-user credentials — that user has access to DAHBOX_STAKES).
-// Local dev: set these in .env.local.
+// ─── DynamoDB Client (lazy) ───────────────────────
+// Client is created on first use, NOT at module load time.
+// This guarantees process.env is read from the actual Lambda runtime environment,
+// not from whatever was available when the module was first bundled/loaded.
 
-const clientConfig: Record<string, unknown> = {
-  region: process.env.AWS_REGION || "us-east-1",
-};
+let _ddb: DynamoDBDocumentClient | null = null;
 
-const accessKeyId =
-  process.env.CUSTOM_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
-const secretAccessKey =
-  process.env.CUSTOM_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+function getDb(): DynamoDBDocumentClient {
+  if (_ddb) return _ddb;
 
-if (accessKeyId && secretAccessKey) {
-  clientConfig.credentials = { accessKeyId, secretAccessKey };
+  const accessKeyId =
+    process.env.CUSTOM_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
+  const secretAccessKey =
+    process.env.CUSTOM_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+
+  const config: ConstructorParameters<typeof DynamoDBClient>[0] = {
+    region: process.env.AWS_REGION || "us-east-1",
+  };
+
+  if (accessKeyId && secretAccessKey) {
+    config.credentials = { accessKeyId, secretAccessKey };
+  }
+
+  _ddb = DynamoDBDocumentClient.from(new DynamoDBClient(config));
+  return _ddb;
 }
 
-const ddb = DynamoDBDocumentClient.from(new DynamoDBClient(clientConfig));
+// ─── Test helper (resets lazy client — for integration tests) ───
+export function _resetDbClient(): void {
+  _ddb = null;
+}
 
 // ─── Types ───────────────────────────────────────
 
@@ -41,18 +53,20 @@ export interface StakeRecord {
   outcomeLabel: string;
   movieTitle: string;
   amount: number;
+  totalPool: number;
+  outcomeStaked: number;
   status: "active" | "won" | "lost" | "paid";
   potentialPayout: number;
   actualPayout?: number;
   createdAt: string;
   resolvedAt?: string;
-  transactionId: string; // Rolledge ROLLEDGE_LEDGER transaction_id — the signed ledger entry
+  transactionId: string; // Rolledge ROLLEDGE_LEDGER transaction_id
 }
 
 // ─── Stake Operations ────────────────────────────
 
 export async function createStake(stake: StakeRecord): Promise<void> {
-  await ddb.send(
+  await getDb().send(
     new PutCommand({
       TableName: STAKES_TABLE,
       Item: stake,
@@ -63,7 +77,7 @@ export async function createStake(stake: StakeRecord): Promise<void> {
 export async function getStakesForMarket(
   marketId: string
 ): Promise<StakeRecord[]> {
-  const result = await ddb.send(
+  const result = await getDb().send(
     new QueryCommand({
       TableName: STAKES_TABLE,
       KeyConditionExpression: "pk = :pk",
@@ -76,7 +90,7 @@ export async function getStakesForMarket(
 export async function getStakesForUser(
   userId: string
 ): Promise<StakeRecord[]> {
-  const result = await ddb.send(
+  const result = await getDb().send(
     new QueryCommand({
       TableName: STAKES_TABLE,
       IndexName: "userId-index",
@@ -108,7 +122,7 @@ export async function updateStakeStatus(
     exprValues[":payout"] = actualPayout;
   }
 
-  await ddb.send(
+  await getDb().send(
     new UpdateCommand({
       TableName: STAKES_TABLE,
       Key: { pk, sk },
@@ -129,7 +143,7 @@ export async function updateStakeStatus(
     const leaderboardPk = `LEADERBOARD#BOXOFFICE_MONTHLY#${monthStr}`;
     const leaderboardSk = `USER#${userId}`;
 
-    await ddb.send(
+    await getDb().send(
       new UpdateCommand({
         TableName: STAKES_TABLE,
         Key: { pk: leaderboardPk, sk: leaderboardSk },
@@ -161,7 +175,7 @@ export async function getLeaderboard(
   period: string, // e.g., "2026-06"
   limit: number = 50
 ): Promise<LeaderboardRecord[]> {
-  const result = await ddb.send(
+  const result = await getDb().send(
     new QueryCommand({
       TableName: STAKES_TABLE,
       KeyConditionExpression: "pk = :pk",

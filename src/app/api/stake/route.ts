@@ -96,6 +96,8 @@ export async function POST(req: NextRequest) {
       outcomeLabel: outcomeLabel || outcomeId,
       movieTitle: movieTitle || "Unknown",
       amount,
+      totalPool: totalPool || 0,
+      outcomeStaked: outcomeStaked || 0,
       status: "active",
       potentialPayout,
       createdAt: new Date().toISOString(),
