@@ -54,10 +54,11 @@ export function _resetDbClient(): void {
 
 /**
  * Hash a userId (ML-DSA public key, potentially thousands of bytes) to a
- * 32-char hex string safe for DynamoDB sort keys (limit: 1024 bytes).
- * The full userId is always stored in the item body.
+ * 32-char hex string safe for DynamoDB sort keys (limit: 1024 bytes) and
+ * GSI indexed attributes (limit: 2048 bytes).
+ * The full userId is always stored in userIdFull (non-indexed) for auditing.
  */
-function hashUserId(userId: string): string {
+export function hashUserId(userId: string): string {
   return createHash("sha256").update(userId).digest("hex").slice(0, 32);
 }
 
@@ -65,8 +66,9 @@ function hashUserId(userId: string): string {
 
 export interface StakeRecord {
   pk: string; // MARKET#{marketId}
-  sk: string; // STAKE#{userId}#{timestamp}
-  userId: string;
+  sk: string; // STAKE#{sha256(userId)}#{timestamp}
+  userId: string;      // sha256(publicKey).slice(0,32) — used in GSI, safe size
+  userIdFull?: string; // full ML-DSA public key — NOT indexed, for auditing only
   marketId: string;
   outcomeId: string;
   outcomeLabel: string;

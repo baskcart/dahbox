@@ -76,15 +76,18 @@ export async function POST(req: NextRequest) {
 
     const timestamp = Date.now();
     const pk = `MARKET#${marketId}`;
-    // Use a hash of userId in the sk to stay within DynamoDB's 1024-byte sort key limit.
-    // The full userId is stored in the item body for auditing and GSI queries.
+    // Hash the full ML-DSA public key for both the sk AND the userId item attribute.
+    // DynamoDB limits: sort key ≤ 1024 bytes, GSI indexed attribute ≤ 2048 bytes.
+    // The raw key (2600+ bytes) blows both limits. The hash is a safe 32-char hex string.
+    // userIdFull preserves the original for auditing (it is NOT indexed).
     const userIdHash = hashUserId(userId);
     const sk = `STAKE#${userIdHash}#${timestamp}`;
 
     const stake: StakeRecord = {
       pk,
       sk,
-      userId,
+      userId: userIdHash,       // 32-char hex — safe for GSI index
+      userIdFull: userId,       // full ML-DSA key, NOT indexed, for auditing only
       marketId,
       outcomeId,
       outcomeLabel: outcomeLabel || outcomeId,
@@ -100,7 +103,7 @@ export async function POST(req: NextRequest) {
 
     await createStake(stake);
 
-    console.log(`[Stake] ⏳ RESERVED ${amount} DAH for ${userId.slice(0, 12)}... on "${outcomeLabel}" | ${pk}`);
+    console.log(`[Stake] ⏳ RESERVED ${amount} DAH for ${userIdHash} (${userId.slice(0, 12)}...) on "${outcomeLabel}" | ${pk}`);
 
     return NextResponse.json({
       success: true,
