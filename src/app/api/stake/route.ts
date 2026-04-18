@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   createStake,
+  activateStake,
+  deleteStake,
   getStakesForMarket,
   getStakesForUser,
   StakeRecord,
 } from "../../lib/stakes";
 
-// CORS: allow Memi (dah.mx) to call /api/stake cross-origin.
-// Security is provided by the transactionId requirement — only real
-// Rolledge-confirmed transfers produce a valid transactionId.
+// CORS: allow Memi (dah.mx) cross-origin for all stake operations.
 const ALLOWED_ORIGINS = [
   "https://dah.mx",
   "https://www.dah.mx",
@@ -20,7 +20,7 @@ function corsHeaders(req: NextRequest): Record<string, string> {
   const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : (ALLOWED_ORIGINS[0] ?? "https://dah.mx");
   return {
     "Access-Control-Allow-Origin": allowed,
-    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+    "Access-Control-Allow-Methods": "POST, PATCH, DELETE, GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
 }
@@ -30,66 +30,47 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 /**
- * POST /api/stake — Record a confirmed prediction stake
+ * POST /api/stake — Phase 1: Reserve a pending stake.
  *
- * This route ONLY records the stake in DAHBOX_STAKES.
- * The Rolledge ledger transfer (debit from user, credit to market escrow)
- * is handled by Memi using the user's ML-DSA signing key before this is called.
+ * Called by Memi BEFORE the Rolledge transfer. Creates a stake record with
+ * status="pending". No transactionId yet — money has NOT moved.
  *
- * DahBox receives STAKE_CONFIRMED + transactionId from Memi via postMessage,
- * then calls this endpoint to record the result.
+ * Returns { stakeKey: { pk, sk } } so Memi can reference the record for Phase 2.
  *
- * Body: {
- *   userId: string (publicKey),
- *   marketId: string,
- *   outcomeId: string,
- *   outcomeLabel: string,
- *   movieTitle: string,
- *   amount: number,
- *   totalPool: number,
- *   outcomeStaked: number,
- *   transactionId: string  — from the real Rolledge transfer
- * }
+ * Rollback: DELETE /api/stake  (if transfer fails — trivial, no ledger reversal needed)
+ * Confirm:  PATCH  /api/stake  (if transfer succeeds — sets status=active + transactionId)
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const {
       userId, marketId, outcomeId, outcomeLabel,
-      movieTitle, amount, totalPool, outcomeStaked, transactionId,
+      movieTitle, amount, totalPool, outcomeStaked,
     } = body;
 
-    // Validate required fields
     if (!userId || !marketId || !outcomeId || !amount) {
       return NextResponse.json(
         { success: false, error: "userId, marketId, outcomeId, and amount are required" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders(req) }
       );
     }
-
-    if (!transactionId) {
-      return NextResponse.json(
-        { success: false, error: "transactionId is required — stake must be pre-confirmed by Memi" },
-        { status: 400 }
-      );
-    }
-
     if (typeof amount !== "number" || amount <= 0) {
       return NextResponse.json(
         { success: false, error: "Amount must be a positive number" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders(req) }
       );
     }
 
-    // Calculate potential payout (for display — actual payout settled at resolution)
     const userShareOfOutcome = amount / ((outcomeStaked || 0) + amount);
     const potentialPayout = Math.round(userShareOfOutcome * ((totalPool || 0) + amount) * 0.97 * 100) / 100;
 
-    // Record stake in DAHBOX_STAKES
     const timestamp = Date.now();
+    const pk = `MARKET#${marketId}`;
+    const sk = `STAKE#${userId}#${timestamp}`;
+
     const stake: StakeRecord = {
-      pk: `MARKET#${marketId}`,
-      sk: `STAKE#${userId}#${timestamp}`,
+      pk,
+      sk,
       userId,
       marketId,
       outcomeId,
@@ -98,36 +79,93 @@ export async function POST(req: NextRequest) {
       amount,
       totalPool: totalPool || 0,
       outcomeStaked: outcomeStaked || 0,
-      status: "active",
+      status: "pending",  // Money has NOT moved yet
       potentialPayout,
       createdAt: new Date().toISOString(),
-      transactionId,  // links to Rolledge ROLLEDGE_LEDGER entry
+      // transactionId absent until PATCH /api/stake confirms the transfer
     };
 
     await createStake(stake);
 
-    console.log(`[Stake] ✅ ${userId.slice(0, 12)}... staked ${amount} DAH on "${outcomeLabel}" for "${movieTitle}" | txn: ${transactionId}`);
+    console.log(`[Stake] ⏳ RESERVED ${amount} DAH for ${userId.slice(0, 12)}... on "${outcomeLabel}" | ${pk}`);
 
     return NextResponse.json({
       success: true,
-      stake: {
-        marketId,
-        outcomeId,
-        outcomeLabel,
-        amount,
-        potentialPayout,
-        transactionId,
-      },
+      stakeKey: { pk, sk },   // Memi uses this to confirm or rollback
+      potentialPayout,
     }, { headers: corsHeaders(req) });
+
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Stake failed";
-    console.error("[Stake] Error:", message);
+    const message = err instanceof Error ? err.message : "Reserve failed";
+    console.error("[Stake] POST error:", message);
     return NextResponse.json({ success: false, error: message }, { status: 500, headers: corsHeaders(req) });
   }
 }
 
 /**
- * GET /api/stake?userId=X — Get user's stakes
+ * PATCH /api/stake — Phase 2 (success): Confirm the stake.
+ *
+ * Called by Memi AFTER the Rolledge transfer succeeds.
+ * Activates the pending stake and records the real transactionId.
+ *
+ * Body: { pk, sk, transactionId }
+ */
+export async function PATCH(req: NextRequest) {
+  try {
+    const { pk, sk, transactionId } = await req.json();
+
+    if (!pk || !sk || !transactionId) {
+      return NextResponse.json(
+        { success: false, error: "pk, sk, and transactionId are required" },
+        { status: 400, headers: corsHeaders(req) }
+      );
+    }
+
+    await activateStake(pk, sk, transactionId);
+
+    console.log(`[Stake] ✅ CONFIRMED ${pk}/${sk} | txn: ${transactionId}`);
+    return NextResponse.json({ success: true, transactionId }, { headers: corsHeaders(req) });
+
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Confirm failed";
+    console.error("[Stake] PATCH error:", message);
+    return NextResponse.json({ success: false, error: message }, { status: 500, headers: corsHeaders(req) });
+  }
+}
+
+/**
+ * DELETE /api/stake — Phase 2 (failure): Rollback the pending stake.
+ *
+ * Called by Memi when the Rolledge transfer fails after a successful reserve.
+ * Deletes the pending record. No money has moved — this is a clean, trivial rollback.
+ *
+ * Body: { pk, sk }
+ */
+export async function DELETE(req: NextRequest) {
+  try {
+    const { pk, sk } = await req.json();
+
+    if (!pk || !sk) {
+      return NextResponse.json(
+        { success: false, error: "pk and sk are required" },
+        { status: 400, headers: corsHeaders(req) }
+      );
+    }
+
+    await deleteStake(pk, sk);
+
+    console.log(`[Stake] 🗑️ ROLLED BACK pending stake ${pk}/${sk}`);
+    return NextResponse.json({ success: true }, { headers: corsHeaders(req) });
+
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Rollback failed";
+    console.error("[Stake] DELETE error:", message);
+    return NextResponse.json({ success: false, error: message }, { status: 500, headers: corsHeaders(req) });
+  }
+}
+
+/**
+ * GET /api/stake?userId=X  — Get user's stakes
  * GET /api/stake?marketId=X — Get stakes for a market
  */
 export async function GET(req: NextRequest) {
@@ -139,22 +177,16 @@ export async function GET(req: NextRequest) {
     if (userId) {
       const stakes = await getStakesForUser(userId);
       return NextResponse.json({
-        success: true,
-        userId,
-        stakes,
-        count: stakes.length,
-        totalStaked: stakes.reduce((s, st) => s + st.amount, 0),
+        success: true, userId, stakes, count: stakes.length,
+        // Exclude pending from total — pending stakes haven't transferred yet
+        totalStaked: stakes.filter(s => s.status !== "pending").reduce((s, st) => s + st.amount, 0),
       });
     }
-
     if (marketId) {
       const stakes = await getStakesForMarket(marketId);
       return NextResponse.json({
-        success: true,
-        marketId,
-        stakes,
-        count: stakes.length,
-        totalPool: stakes.reduce((s, st) => s + st.amount, 0),
+        success: true, marketId, stakes, count: stakes.length,
+        totalPool: stakes.filter(s => s.status !== "pending").reduce((s, st) => s + st.amount, 0),
       });
     }
 

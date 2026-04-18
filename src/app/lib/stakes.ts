@@ -1,6 +1,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
+  DeleteCommand,
   PutCommand,
   QueryCommand,
   UpdateCommand,
@@ -24,6 +25,14 @@ function getDb(): DynamoDBDocumentClient {
     process.env.CUSTOM_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
   const secretAccessKey =
     process.env.CUSTOM_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+
+  // Diagnostic log — shows what credentials are available at Lambda runtime.
+  // Remove once credential injection is confirmed working.
+  console.log(
+    `[DahBox/db] CUSTOM_KEY=${process.env.CUSTOM_AWS_ACCESS_KEY_ID?.slice(0,8) ?? "MISSING"} ` +
+    `AWS_KEY=${process.env.AWS_ACCESS_KEY_ID?.slice(0,8) ?? "MISSING"} ` +
+    `resolved=${accessKeyId?.slice(0,8) ?? "NONE"}`
+  );
 
   const config: ConstructorParameters<typeof DynamoDBClient>[0] = {
     region: process.env.AWS_REGION || "us-east-1",
@@ -55,21 +64,58 @@ export interface StakeRecord {
   amount: number;
   totalPool: number;
   outcomeStaked: number;
-  status: "active" | "won" | "lost" | "paid";
+  status: "pending" | "active" | "won" | "lost" | "paid";
   potentialPayout: number;
   actualPayout?: number;
   createdAt: string;
   resolvedAt?: string;
-  transactionId: string; // Rolledge ROLLEDGE_LEDGER transaction_id
+  transactionId?: string; // Rolledge ROLLEDGE_LEDGER transaction_id — set on confirm
 }
 
 // ─── Stake Operations ────────────────────────────
 
+/** Phase 1: Write a pending stake (no transactionId yet — money has NOT moved). */
 export async function createStake(stake: StakeRecord): Promise<void> {
   await getDb().send(
     new PutCommand({
       TableName: STAKES_TABLE,
       Item: stake,
+    })
+  );
+}
+
+/**
+ * Phase 2 (success): Transfer confirmed — activate the pending stake.
+ * Sets status → "active" and records the Rolledge transactionId.
+ */
+export async function activateStake(pk: string, sk: string, transactionId: string): Promise<void> {
+  await getDb().send(
+    new UpdateCommand({
+      TableName: STAKES_TABLE,
+      Key: { pk, sk },
+      UpdateExpression: "SET #s = :active, transactionId = :txnId, activatedAt = :now",
+      ConditionExpression: "#s = :pending",
+      ExpressionAttributeNames: { "#s": "status" },
+      ExpressionAttributeValues: {
+        ":active": "active",
+        ":pending": "pending",
+        ":txnId": transactionId,
+        ":now": new Date().toISOString(),
+      },
+    })
+  );
+}
+
+/**
+ * Phase 2 (failure): Transfer failed — delete the pending stake record.
+ * Called when the Rolledge transfer fails after a successful reserve.
+ * No money has moved at this point, so this is a clean rollback.
+ */
+export async function deleteStake(pk: string, sk: string): Promise<void> {
+  await getDb().send(
+    new DeleteCommand({
+      TableName: STAKES_TABLE,
+      Key: { pk, sk },
     })
   );
 }
