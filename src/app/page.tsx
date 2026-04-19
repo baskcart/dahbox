@@ -675,12 +675,16 @@ export default function DahBoxHome() {
     }
   }, [selectedLanguage, selectedGenre, isRemote]);
 
-  // Listen for filter sync events (primarily for the TV view mirroring the remote phone)
+  // Listen for filter sync and scroll events from the Memi remote controller
   useEffect(() => {
     const handleSync = (e: MessageEvent) => {
       if (e.data?.type === 'SYNC_FILTERS') {
         if (e.data.lang !== undefined) setSelectedLanguage(e.data.lang);
         if (e.data.genre !== undefined) setSelectedGenre(e.data.genre);
+      }
+      // Scroll bridge: Memi sends touchmove/wheel delta → DahBox scrolls its content
+      if (e.data?.type === 'DAHBOX_SCROLL' && typeof e.data.delta === 'number') {
+        window.scrollBy({ top: e.data.delta, behavior: 'smooth' });
       }
     };
     window.addEventListener('message', handleSync);
