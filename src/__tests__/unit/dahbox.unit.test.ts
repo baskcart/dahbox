@@ -198,3 +198,147 @@ describe('LANGUAGES array completeness', () => {
     expect(allCodes.slice(0, 3)).toContain('en');
   });
 });
+
+// ─── 5. Settlement Logic ──────────────────────────────────────────────────────
+
+/**
+ * Mirrors the parimutuel settlement math in /api/resolve → processPayouts().
+ * All tests are pure-function: no network, no AWS, no DynamoDB.
+ */
+
+interface TestStake {
+  userId: string;
+  outcomeId: string;
+  amount: number;
+  status: 'active' | 'paid' | 'lost';
+  actualPayout?: number;
+}
+
+function makeStake(outcomeId: string, amount: number, userId = 'user-a'): TestStake {
+  return { userId, outcomeId, amount, status: 'active' };
+}
+
+/** Pure settlement calculator — mirrors processPayouts() in /api/resolve. */
+function settleMarket(stakes: TestStake[], winningOutcomeId: string): TestStake[] {
+  const active = stakes.filter(s => s.status === 'active');
+  const totalPool = active.reduce((sum, s) => sum + s.amount, 0);
+  const winningTotal = active
+    .filter(s => s.outcomeId === winningOutcomeId)
+    .reduce((sum, s) => sum + s.amount, 0);
+
+  return active.map(s => {
+    if (s.outcomeId === winningOutcomeId && winningTotal > 0) {
+      const actualPayout = Math.round((s.amount / winningTotal) * totalPool * 0.97 * 100) / 100;
+      return { ...s, status: 'paid' as const, actualPayout };
+    }
+    return { ...s, status: 'lost' as const, actualPayout: 0 };
+  });
+}
+
+describe('Settlement: parimutuel payout math', () => {
+  it('winner gets proportional share of total pool minus 3% fee', () => {
+    const stakes = [
+      makeStake('outcome_a', 50, 'user-a'),
+      makeStake('outcome_a', 50, 'user-b'),
+      makeStake('outcome_b', 100, 'user-c'),
+    ];
+    const settled = settleMarket(stakes, 'outcome_a');
+    const winners = settled.filter(s => s.status === 'paid');
+    const losers  = settled.filter(s => s.status === 'lost');
+    expect(winners).toHaveLength(2);
+    expect(losers).toHaveLength(1);
+    // pool=200, each winner staked 50/100 → payout = (50/100)*200*0.97 = 97
+    expect(winners[0].actualPayout).toBeCloseTo(97, 1);
+    expect(winners[1].actualPayout).toBeCloseTo(97, 1);
+  });
+
+  it('loser always receives actualPayout = 0', () => {
+    const stakes = [makeStake('outcome_a', 100, 'user-a'), makeStake('outcome_b', 200, 'user-b')];
+    const settled = settleMarket(stakes, 'outcome_a');
+    const loser = settled.find(s => s.userId === 'user-b')!;
+    expect(loser.status).toBe('lost');
+    expect(loser.actualPayout).toBe(0);
+  });
+
+  it('platform retains exactly 3% of total pool', () => {
+    const stakes = [makeStake('outcome_a', 100, 'user-a'), makeStake('outcome_b', 100, 'user-b')];
+    const settled = settleMarket(stakes, 'outcome_a');
+    const totalPaidOut = settled.reduce((sum, s) => sum + (s.actualPayout ?? 0), 0);
+    const platformTake = 200 - totalPaidOut;
+    expect(platformTake).toBeCloseTo(200 * 0.03, 1);
+  });
+
+  it('sole staker gets back stake minus 3% fee', () => {
+    const settled = settleMarket([makeStake('outcome_a', 100)], 'outcome_a');
+    expect(settled[0].status).toBe('paid');
+    expect(settled[0].actualPayout).toBeCloseTo(97, 1);
+  });
+
+  it('all stakers on winning outcome — total payout = pool × 0.97', () => {
+    const stakes = [makeStake('outcome_a', 100, 'user-a'), makeStake('outcome_a', 300, 'user-b')];
+    const settled = settleMarket(stakes, 'outcome_a');
+    const totalPaid = settled.reduce((sum, s) => sum + (s.actualPayout ?? 0), 0);
+    expect(totalPaid).toBeCloseTo(400 * 0.97, 1);
+  });
+
+  it('larger staker receives proportionally larger payout (10× ratio)', () => {
+    const stakes = [
+      makeStake('outcome_a', 10,  'user-small'),
+      makeStake('outcome_a', 100, 'user-large'),
+      makeStake('outcome_b', 50,  'user-loser'),
+    ];
+    const settled = settleMarket(stakes, 'outcome_a');
+    const small = settled.find(s => s.userId === 'user-small')!;
+    const large = settled.find(s => s.userId === 'user-large')!;
+    expect(large.actualPayout!).toBeGreaterThan(small.actualPayout!);
+    expect(large.actualPayout! / small.actualPayout!).toBeCloseTo(10, 0);
+  });
+
+  it('payout is never negative regardless of pool size', () => {
+    const stakes = [makeStake('outcome_a', 1), makeStake('outcome_b', 999_999)];
+    const settled = settleMarket(stakes, 'outcome_a');
+    settled.forEach(s => expect(s.actualPayout ?? 0).toBeGreaterThanOrEqual(0));
+  });
+});
+
+describe('Settlement: winner determination from TMDB revenue brackets', () => {
+  /** Mirrors bracket logic in /api/resolve → handleRealResolution(). */
+  function determineWinner(revenueM: number): string {
+    if (revenueM < 100)  return 'lt_100';
+    if (revenueM <= 125) return 'b_100_125';
+    if (revenueM <= 150) return 'b_125_150';
+    return 'gt_150';
+  }
+
+  it('$95M → bracket "< $100M"',              () => expect(determineWinner(95)).toBe('lt_100'));
+  it('$100M → bracket "$100M–$125M" (inclusive)', () => expect(determineWinner(100)).toBe('b_100_125'));
+  it('$135.5M → bracket "$125M–$150M"',       () => expect(determineWinner(135.5)).toBe('b_125_150'));
+  it('$195M → bracket "> $150M"',             () => expect(determineWinner(195)).toBe('gt_150'));
+});
+
+describe('Settlement: market close enforcement', () => {
+  /** Mirrors closesAt guard in POST /api/stake. */
+  function isMarketClosed(closesAt: string): boolean {
+    const t = new Date(closesAt).getTime();
+    return !isNaN(t) && Date.now() > t;
+  }
+
+  it('rejects stake when closesAt is in the past', () => {
+    expect(isMarketClosed(new Date(Date.now() - 86_400_000).toISOString())).toBe(true);
+  });
+  it('accepts stake when closesAt is in the future', () => {
+    expect(isMarketClosed(new Date(Date.now() + 86_400_000).toISOString())).toBe(false);
+  });
+  it('accepts stake when closesAt is absent (legacy clients)', () => {
+    expect(isMarketClosed('')).toBe(false);
+  });
+});
+
+describe('Settlement: leaderboard netProfit calculation', () => {
+  const calcNetProfit = (payout: number, staked: number) => payout - staked;
+
+  it('winner netProfit is positive',               () => expect(calcNetProfit(97, 50)).toBeGreaterThan(0));
+  it('loser netProfit is negative',                () => expect(calcNetProfit(0, 50)).toBeLessThan(0));
+  it('loser netProfit equals negative stake amount', () => expect(calcNetProfit(0, 75)).toBe(-75));
+  it('sole staker loses exactly 3% to platform',   () => expect(calcNetProfit(97, 100)).toBeCloseTo(-3, 1));
+});

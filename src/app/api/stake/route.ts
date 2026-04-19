@@ -71,6 +71,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // S3 — Market close enforcement: reject stakes on expired markets.
+    // closesAt is optional (legacy clients may omit it) but enforced when present.
+    if (body.closesAt) {
+      const closesAt = new Date(body.closesAt).getTime();
+      if (!isNaN(closesAt) && Date.now() > closesAt) {
+        return NextResponse.json(
+          { success: false, error: "This market is closed. No more stakes accepted." },
+          { status: 409, headers: corsHeaders(req) }
+        );
+      }
+    }
+
     const userShareOfOutcome = amount / ((outcomeStaked || 0) + amount);
     const potentialPayout = Math.round(userShareOfOutcome * ((totalPool || 0) + amount) * 0.97 * 100) / 100;
 

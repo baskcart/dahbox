@@ -278,6 +278,7 @@ function StakeModal({ market, onClose }: { market: Market; onClose: () => void }
                     movieTitle: market.movieTitle,
                     totalPool: market.totalPool,
                     outcomeStaked: outcome.totalStaked || 0,
+                    closesAt: market.closesAt, // S3: server enforces this on /api/stake
                   },
                 }, '*');
               }}
@@ -536,17 +537,48 @@ export default function DahBoxHome() {
   const [resolveToast, setResolveToast] = useState<string | null>(null);
   const [isTvView, setIsTvView] = useState(false);
   const [isRemote, setIsRemote] = useState(false);
+  // Winner notification: paid/won stakes polled from /api/stake?userId=X
+  const [winnerStakes, setWinnerStakes] = useState<{ marketId: string; movieTitle: string; actualPayout: number; outcomeLabel: string }[]>([]);
+  const [dismissedWins, setDismissedWins] = useState<Set<string>>(new Set());
+  const [walletKey, setWalletKey] = useState('');
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const p = new URLSearchParams(window.location.search);
       if (p.get("view") === "tv") setIsTvView(true);
       if (p.get("view") === "remote") setIsRemote(true);
-      if (p.has("lang")) {
-        setSelectedLanguage(p.get("lang") || '');
-      }
+      if (p.has("lang")) setSelectedLanguage(p.get("lang") || '');
+      if (p.has("wallet")) setWalletKey(decodeURIComponent(p.get("wallet") || ''));
     }
   }, []);
+
+  // S4 — Poll for winner notifications every 30s when wallet key is available
+  useEffect(() => {
+    if (!walletKey || walletKey === 'MEMI_ID') return;
+    const checkWins = async () => {
+      try {
+        const { hashUserId: hashFn } = await import('./lib/stakes');
+        const userId = hashFn(walletKey);
+        const res = await fetch(`/api/stake?userId=${encodeURIComponent(userId)}`);
+        const data = await res.json();
+        if (data.success && Array.isArray(data.stakes)) {
+          const wins = data.stakes
+            .filter((s: { status: string }) => s.status === 'paid' || s.status === 'won')
+            .map((s: { marketId: string; movieTitle: string; actualPayout: number; outcomeLabel: string }) => ({
+              marketId: s.marketId,
+              movieTitle: s.movieTitle,
+              actualPayout: s.actualPayout,
+              outcomeLabel: s.outcomeLabel,
+            }));
+          setWinnerStakes(wins);
+        }
+      } catch { /* silent fail — notification is non-critical */ }
+    };
+    checkWins();
+    const timer = setInterval(checkWins, 30_000);
+    return () => clearInterval(timer);
+  }, [walletKey]);
+
 
   const handleResolve = async (movieId: number, movieMarkets: Market[], mode: 'simulate' | 'real') => {
     try {
@@ -713,6 +745,27 @@ export default function DahBoxHome() {
   return (
     <div className="min-h-screen relative">
       <div className="cinema-glow" />
+
+      {/* S4 — Winner notification banners */}
+      {winnerStakes.filter(w => !dismissedWins.has(w.marketId)).map(win => (
+        <div
+          key={win.marketId}
+          className="sticky top-0 z-50 flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border-b border-amber-500/40 backdrop-blur-md"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-xl">{'\uD83C\uDFC6'}</span>
+            <div>
+              <p className="text-sm font-bold text-amber-300">You won on {win.movieTitle}!</p>
+              <p className="text-xs text-amber-200/80">{win.outcomeLabel} · <span className="font-bold text-amber-300">{win.actualPayout} DAH</span> paid to your wallet</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setDismissedWins(prev => new Set(prev).add(win.marketId))}
+            className="text-amber-400 hover:text-white text-lg leading-none shrink-0 transition-colors"
+            aria-label="Dismiss"
+          >{'\u2715'}</button>
+        </div>
+      ))}
 
       {/* â”€â”€â”€ Header â”€â”€â”€ */}
       {(!isTvView && !isRemote) && (
