@@ -188,3 +188,97 @@ export function generateMarketsForGame(game: GameItem): Market[] {
 
   return markets;
 }
+
+// ─── Generate pre-game markets for a Football fixture ───────────────────────
+// Used for FIFA 2026 and future football tournaments.
+// Markets close at kick-off — no in-play betting.
+// Settlement calls GET /api/football?fixtureId=<id> for the final result.
+
+export interface FootballFixture {
+  fixtureId: number;       // api-football fixture ID
+  homeTeam: string;
+  awayTeam: string;
+  kickoff: string;         // ISO string — market closes at this time
+  competition: string;     // e.g. "FIFA World Cup 2026"
+  round?: string;          // e.g. "Group Stage - 1", "Quarter-final"
+  homeFlag?: string;       // emoji or URL
+  awayFlag?: string;
+}
+
+export function generateMarketsForFixture(fixture: FootballFixture): Market[] {
+  const markets: Market[] = [];
+  const closeDate = new Date(fixture.kickoff); // closes exactly at kick-off
+
+  const baseId = `fifa-${fixture.fixtureId}`;
+  const matchLabel = `${fixture.homeTeam} vs ${fixture.awayTeam}`;
+
+  // Market 1 — Match Result (1X2)
+  markets.push({
+    id: `${baseId}-result`,
+    mediaType: 'football',
+    movieId: fixture.fixtureId,
+    movieTitle: matchLabel,
+    posterPath: null,
+    releaseDate: fixture.kickoff.split('T')[0],
+    category: 'football-match-result',
+    question: `${matchLabel} — Match Result`,
+    outcomes: [
+      { id: 'home', label: `${fixture.homeTeam} Win`,  totalStaked: 0, impliedOdds: 0.4 },
+      { id: 'draw', label: 'Draw',                     totalStaked: 0, impliedOdds: 0.3 },
+      { id: 'away', label: `${fixture.awayTeam} Win`,  totalStaked: 0, impliedOdds: 0.3 },
+    ],
+    totalPool: 0,
+    status: 'open',
+    closesAt: closeDate.toISOString(),
+    createdAt: new Date().toISOString(),
+    homeTeam: fixture.homeTeam,
+    awayTeam: fixture.awayTeam,
+    homeFlag: fixture.homeFlag,
+    awayFlag: fixture.awayFlag,
+    competition: fixture.competition,
+    round: fixture.round,
+  });
+
+  // Market 2 — Total Goals bracket
+  markets.push({
+    id: `${baseId}-goals`,
+    mediaType: 'football',
+    movieId: fixture.fixtureId,
+    movieTitle: matchLabel,
+    posterPath: null,
+    releaseDate: fixture.kickoff.split('T')[0],
+    category: 'football-goals',
+    question: `${matchLabel} — Total Goals`,
+    outcomes: [
+      { id: 'goals-0-1', label: '0 – 1 Goals', totalStaked: 0, impliedOdds: 0.25 },
+      { id: 'goals-2-3', label: '2 – 3 Goals', totalStaked: 0, impliedOdds: 0.45 },
+      { id: 'goals-4p',  label: '4+ Goals',    totalStaked: 0, impliedOdds: 0.30 },
+    ],
+    totalPool: 0,
+    status: 'open',
+    closesAt: closeDate.toISOString(),
+    createdAt: new Date().toISOString(),
+  });
+
+  // Market 3 — Both Teams to Score
+  markets.push({
+    id: `${baseId}-btts`,
+    mediaType: 'football',
+    movieId: fixture.fixtureId,
+    movieTitle: matchLabel,
+    posterPath: null,
+    releaseDate: fixture.kickoff.split('T')[0],
+    category: 'football-btts',
+    question: `${matchLabel} — Both Teams to Score?`,
+    outcomes: [
+      { id: 'yes', label: 'Yes — Both Score', totalStaked: 0, impliedOdds: 0.55 },
+      { id: 'no',  label: 'No',               totalStaked: 0, impliedOdds: 0.45 },
+    ],
+    totalPool: 0,
+    status: 'open',
+    closesAt: closeDate.toISOString(),
+    createdAt: new Date().toISOString(),
+  });
+
+  return markets;
+}

@@ -1,10 +1,11 @@
 // ─── Market Types ────────────────────────────────
 
-export type MediaType = 'movie' | 'book' | 'game';
+export type MediaType = 'movie' | 'book' | 'game' | 'football';
 export type MarketCategory =
   | 'opening-weekend' | 'total-gross' | 'critical' | 'awards' | 'indie'   // Movies
   | 'book-to-movie' | 'bestseller' | 'book-award'                          // Books
-  | 'game-to-movie' | 'game-award' | 'game-sales';                         // Games
+  | 'game-to-movie' | 'game-award' | 'game-sales'                          // Games
+  | 'football-match-result' | 'football-goals' | 'football-btts';          // Football
 export type MarketStatus = 'open' | 'closed' | 'resolving' | 'resolved' | 'cancelled';
 
 export interface MarketOutcome {
@@ -30,6 +31,13 @@ export interface Market {
   resolvesAt?: string;
   winningOutcome?: string;
   createdAt: string;
+  // Football-specific (optional)
+  homeTeam?: string;
+  awayTeam?: string;
+  homeFlag?: string;
+  awayFlag?: string;
+  competition?: string;
+  round?: string;
 }
 
 export interface UserPosition {
@@ -174,10 +182,28 @@ export const MARKET_CATEGORIES: Record<MarketCategory, {
     color: '#6366F1',
   },
   'game-sales': {
-    icon: '📊',
+    icon: '\uD83D\uDCCA',
     label: 'Game Sales',
     description: 'Sales milestone predictions',
     color: '#14B8A6',
+  },
+  'football-match-result': {
+    icon: '\u26BD',
+    label: 'Match Result',
+    description: 'Home / Draw / Away — pre-game only',
+    color: '#22C55E',
+  },
+  'football-goals': {
+    icon: '\uD83C\uDFAF',
+    label: 'Total Goals',
+    description: 'Goal count bracket prediction',
+    color: '#F97316',
+  },
+  'football-btts': {
+    icon: '\uD83D\uDD25',
+    label: 'Both Teams to Score',
+    description: 'Will both teams find the net?',
+    color: '#EAB308',
   },
 };
 

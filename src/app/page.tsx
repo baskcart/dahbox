@@ -12,7 +12,7 @@ import {
   Market, TMDBMovie, BookItem, GameItem, GENRE_MAP, MARKET_CATEGORIES,
   formatDAH, getMultiplier, MarketCategory, MediaType,
 } from './lib/types';
-import { generateMarketsForMovie, generateMarketsForBook, generateMarketsForGame } from './lib/markets';
+import { generateMarketsForMovie, generateMarketsForBook, generateMarketsForGame, generateMarketsForFixture, FootballFixture } from './lib/markets';
 import { movieSlug } from './lib/tmdb';
 import { useRouter } from 'next/navigation';
 
@@ -321,6 +321,9 @@ function MovieCard({ markets, onStake, resolutions, onResolve }: {
 
   // Market type labels for tabs
   const tabLabels = markets.map(m => {
+    if (m.category === 'football-match-result') return 'Result';
+    if (m.category === 'football-goals')        return 'Goals';
+    if (m.category === 'football-btts')         return 'BTTS';
     if (m.question.includes('Over/Under')) return 'Over/Under';
     if (m.question.includes('Opening Weekend')) return 'OW Bracket';
     if (m.question.includes('Will') && m.question.includes('adaptation')) return 'Adaptation?';
@@ -333,9 +336,22 @@ function MovieCard({ markets, onStake, resolutions, onResolve }: {
 
   return (
     <div className={`glass-card overflow-hidden group ${isResolved ? 'ring-1 ring-green-500/30' : ''}`}>
-      {/* Poster + Gradient overlay */}
+      {/* Poster / Fixture hero */}
       <div className="relative h-52 poster-shimmer">
-        {market.posterPath ? (
+        {market.mediaType === 'football' ? (
+          <div className="w-full h-full bg-gradient-to-br from-emerald-950 via-green-900 to-slate-900 flex flex-col items-center justify-center gap-2 px-4">
+            <div className="flex items-center gap-4 text-4xl">
+              <span title={market.homeTeam}>{market.homeFlag ?? '⚽'}</span>
+              <span className="text-slate-400 text-xl font-bold">vs</span>
+              <span title={market.awayTeam}>{market.awayFlag ?? '⚽'}</span>
+            </div>
+            {market.competition && (
+              <span className="text-[10px] uppercase tracking-widest text-emerald-300/70 font-semibold text-center">
+                {market.competition}{market.round ? ` · ${market.round}` : ''}
+              </span>
+            )}
+          </div>
+        ) : market.posterPath ? (
           <img
             src={market.posterPath.startsWith('http') ? market.posterPath : `${TMDB_IMAGE_BASE}/w500${market.posterPath}`}
             alt={market.movieTitle}
@@ -446,11 +462,11 @@ function MovieCard({ markets, onStake, resolutions, onResolve }: {
                 >
                   <PlayCircle className="w-3 h-3 inline mr-1" />Sim
                 </button>
-                {market.mediaType === 'movie' && (
+                {(market.mediaType === 'movie' || market.mediaType === 'football') && (
                   <button
                     onClick={() => onResolve(market.movieId, markets, 'real')}
                     className="text-xs py-1.5 px-2.5 rounded-lg bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 border border-blue-500/20 transition-all"
-                    title="Resolve with real TMDB data"
+                    title={market.mediaType === 'football' ? 'Resolve with live match result' : 'Resolve with real TMDB data'}
                   >
                     <CheckCircle2 className="w-3 h-3 inline mr-1" />Real
                   </button>
@@ -683,9 +699,23 @@ export default function DahBoxHome() {
             return;
           }
           setMarkets([]);
+        } else if (mediaTab === 'football') {
+          const res = await fetch('/api/fixtures');
+          const data = await res.json();
+          if (data.success && data.fixtures?.length > 0) {
+            const allMarkets: Market[] = [];
+            for (const fixture of data.fixtures as FootballFixture[]) {
+              allMarkets.push(...generateMarketsForFixture(fixture));
+            }
+            const mIds = allMarkets.map(m => m.id);
+            const totals = await fetchRealPoolTotals(mIds);
+            setMarkets(overlayRealPoolData(allMarkets, totals));
+            return;
+          }
+          setMarkets([]);
         }
       } catch (err) {
-        console.error(`Failed to load ${mediaTab}s:`, err);
+        console.error(`Failed to load ${mediaTab}:`, err);
         setMarkets([]);
       } finally {
         setLoading(false);
@@ -736,9 +766,10 @@ export default function DahBoxHome() {
   const groupedMovies = Object.values(movieGroups);
 
   const categoriesForTab: Record<MediaType, MarketCategory[]> = {
-    movie: ['opening-weekend', 'total-gross', 'critical', 'awards', 'indie'],
-    book: ['book-to-movie', 'bestseller', 'book-award'],
-    game: ['game-to-movie', 'game-award', 'game-sales'],
+    movie:    ['opening-weekend', 'total-gross', 'critical', 'awards', 'indie'],
+    book:     ['book-to-movie', 'bestseller', 'book-award'],
+    game:     ['game-to-movie', 'game-award', 'game-sales'],
+    football: ['football-match-result', 'football-goals', 'football-btts'],
   };
   const categories = ['all', ...categoriesForTab[mediaTab]] as (MarketCategory | 'all')[];
 
@@ -810,14 +841,16 @@ export default function DahBoxHome() {
       <section className="relative max-w-7xl mx-auto px-4 pt-10 pb-6">
         <div className="text-center space-y-3 fade-in-up">
           <h2 className="text-4xl md:text-5xl font-extrabold text-white">
-            {mediaTab === 'movie' && <>Predict the <span className="bg-gradient-to-r from-purple-400 to-amber-400 bg-clip-text text-transparent">Box Office</span></>}
-            {mediaTab === 'book' && <>Which Books Become <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">Movies</span>?</>}
-            {mediaTab === 'game' && <>Which Games Become <span className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Movies</span>?</>}
+            {mediaTab === 'movie'    && <>Predict the <span className="bg-gradient-to-r from-purple-400 to-amber-400 bg-clip-text text-transparent">Box Office</span></>}
+            {mediaTab === 'book'     && <>Which Books Become <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">Movies</span>?</>}
+            {mediaTab === 'game'     && <>Which Games Become <span className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Movies</span>?</>}
+            {mediaTab === 'football' && <>Predict the <span className="bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">FIFA World Cup</span></>}
           </h2>
           <p className="text-lg text-slate-400 max-w-xl mx-auto">
-            {mediaTab === 'movie' && 'Stake DAH on opening weekends, total gross, and critic scores. Win big when you call it right.'}
-            {mediaTab === 'book' && 'Predict which bestselling novels will get a movie or TV adaptation. Stake DAH on your literary instincts.'}
-            {mediaTab === 'game' && 'Predict which iconic video games will get Hollywood adaptations. Live-action or animated? You decide.'}
+            {mediaTab === 'movie'    && 'Stake DAH on opening weekends, total gross, and critic scores. Win big when you call it right.'}
+            {mediaTab === 'book'     && 'Predict which bestselling novels will get a movie or TV adaptation. Stake DAH on your literary instincts.'}
+            {mediaTab === 'game'     && 'Predict which iconic video games will get Hollywood adaptations. Live-action or animated? You decide.'}
+            {mediaTab === 'football' && 'Predict match results, total goals, and both-teams-to-score across top leagues. Markets close at kick-off.'}
           </p>
           <p className="text-sm text-slate-500 max-w-md mx-auto">
             New here? <button onClick={() => setShowGetDAH(true)} className="text-purple-400 hover:text-purple-300 font-medium underline underline-offset-2 transition-colors">Learn how to get DAH tokens</button> to start predicting.
@@ -825,7 +858,10 @@ export default function DahBoxHome() {
           <div className="flex items-center justify-center gap-6 pt-2">
             <div className="flex items-center gap-2 text-sm text-slate-300">
               <TrendingUp className="w-4 h-4 text-green-400" />
-              <span>{groupedMovies.length} {mediaTab === 'movie' ? 'Movies' : mediaTab === 'book' ? 'Books' : 'Games'}</span>
+              <span>
+                {groupedMovies.length}{' '}
+                {mediaTab === 'movie' ? 'Movies' : mediaTab === 'book' ? 'Books' : mediaTab === 'game' ? 'Games' : 'Fixtures'}
+              </span>
             </div>
             <div className="flex items-center gap-2 text-sm text-slate-300">
               <Trophy className="w-4 h-4 text-amber-400" />
@@ -835,15 +871,16 @@ export default function DahBoxHome() {
         </div>
       </section>
 
-      {/* â”€â”€â”€ Media Type Tabs â”€â”€â”€ */}
+      {/* ─── Media Type Tabs ─── */}
       {(!isTvView && !isRemote) && (
         <>
       <section className="max-w-7xl mx-auto px-4 pb-3">
         <div className="flex gap-1 p-1 rounded-2xl bg-white/5 border border-white/10 w-fit">
           {[
-            { id: 'movie' as MediaType, label: 'Movies', icon: <Film className="w-4 h-4" />, color: 'from-purple-500 to-amber-500' },
-            { id: 'book' as MediaType, label: 'Books', icon: <BookOpen className="w-4 h-4" />, color: 'from-emerald-500 to-teal-500' },
-            { id: 'game' as MediaType, label: 'Games', icon: <Gamepad2 className="w-4 h-4" />, color: 'from-blue-500 to-indigo-500' },
+            { id: 'movie'    as MediaType, label: 'Movies',   icon: <Film className="w-4 h-4" />,        color: 'from-purple-500 to-amber-500' },
+            { id: 'book'     as MediaType, label: 'Books',    icon: <BookOpen className="w-4 h-4" />,    color: 'from-emerald-500 to-teal-500' },
+            { id: 'game'     as MediaType, label: 'Games',    icon: <Gamepad2 className="w-4 h-4" />,    color: 'from-blue-500 to-indigo-500' },
+            { id: 'football' as MediaType, label: 'FIFA ⚽', icon: <span className="text-base">🏆</span>, color: 'from-green-500 to-emerald-600' },
           ].map(tab => {
             const isActive = mediaTab === tab.id;
             return (
@@ -863,6 +900,7 @@ export default function DahBoxHome() {
           })}
         </div>
       </section>
+
 
       {/* â”€â”€â”€ Category Tabs â”€â”€â”€ */}
       <section className="max-w-7xl mx-auto px-4 pb-2">

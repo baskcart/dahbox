@@ -63,7 +63,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (mode === 'real') {
+    // Football markets: movieId is the fixtureId; route to football oracle
+    const isFootball = Array.isArray(markets) && markets[0]?.id?.startsWith('fifa-');
+    if (mode === 'real' && isFootball) {
+      return handleFootballResolution(movieId, markets);
+    } else if (mode === 'real') {
       return handleRealResolution(movieId, markets);
     } else {
       return handleSimulatedResolution(movieId, markets);
@@ -137,6 +141,86 @@ async function handleSimulatedResolution(movieId: number, markets: MarketInput[]
     mode: 'simulate',
     movieId,
     movieTitle: markets[0]?.movieTitle || 'Unknown',
+    resolutions,
+    payouts,
+  });
+}
+
+/**
+ * FOOTBALL mode: fetch real match result from /api/football oracle
+ * and resolve all three market types (result, goals, BTTS).
+ */
+async function handleFootballResolution(fixtureId: number, markets: MarketInput[]) {
+  const base = process.env.NEXT_PUBLIC_BOX_URL || 'http://localhost:3000';
+  const oracleRes = await fetch(`${base}/api/football?fixtureId=${fixtureId}`);
+  const oracle = await oracleRes.json();
+
+  if (!oracleRes.ok || oracle.error) {
+    return NextResponse.json({ success: false, error: oracle.error || 'Football oracle error' }, { status: 502 });
+  }
+
+  const FINISHED = ['FT', 'AET', 'PEN'];
+  if (!FINISHED.includes(oracle.status)) {
+    return NextResponse.json({
+      success: false,
+      error: `Match not finished yet (status: ${oracle.status}). Resolve after full time.`,
+      status: oracle.status,
+    });
+  }
+
+  const { homeScore, awayScore, winner, homeTeam, awayTeam } = oracle;
+  const totalGoals: number = (homeScore ?? 0) + (awayScore ?? 0);
+  const scoreLabel = `${homeTeam} ${homeScore}–${awayScore} ${awayTeam}`;
+
+  const resolutions: MarketResolution[] = [];
+
+  for (const market of markets) {
+    const outcomes = market.outcomes || [];
+    if (outcomes.length === 0) continue;
+
+    let winnerId = '';
+    let winnerLabel = '';
+    let realValue = scoreLabel;
+
+    if (market.category === 'football-match-result') {
+      const outcomeId = winner === 'home' ? 'home' : winner === 'away' ? 'away' : 'draw';
+      const found = outcomes.find((o: OutcomeInput) => o.id === outcomeId);
+      if (found) { winnerId = found.id; winnerLabel = found.label; }
+
+    } else if (market.category === 'football-goals') {
+      let found: OutcomeInput | undefined;
+      if (totalGoals <= 1)      found = outcomes.find((o: OutcomeInput) => o.id === 'goals-0-1');
+      else if (totalGoals <= 3) found = outcomes.find((o: OutcomeInput) => o.id === 'goals-2-3');
+      else                      found = outcomes.find((o: OutcomeInput) => o.id === 'goals-4p');
+      if (found) { winnerId = found.id; winnerLabel = found.label; }
+      realValue = `${totalGoals} goals — ${scoreLabel}`;
+
+    } else if (market.category === 'football-btts') {
+      const bothScored = (homeScore ?? 0) > 0 && (awayScore ?? 0) > 0;
+      const found = outcomes.find((o: OutcomeInput) => bothScored ? o.id === 'yes' : o.id === 'no');
+      if (found) { winnerId = found.id; winnerLabel = found.label; }
+      realValue = `${scoreLabel} — both scored: ${bothScored ? 'Yes' : 'No'}`;
+    }
+
+    if (winnerId) {
+      resolutions.push({
+        marketId: market.id,
+        question: market.question,
+        winningOutcomeId: winnerId,
+        winningOutcomeLabel: winnerLabel,
+        realValue,
+        resolvedAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  const payouts = await processPayouts(resolutions);
+  return NextResponse.json({
+    success: true,
+    mode: 'real',
+    movieId: fixtureId,
+    movieTitle: `${homeTeam} vs ${awayTeam}`,
+    oracle,
     resolutions,
     payouts,
   });
