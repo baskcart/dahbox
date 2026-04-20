@@ -14,6 +14,7 @@ frontend:
         - echo "CUSTOM_AWS_SECRET_ACCESS_KEY=$CUSTOM_AWS_SECRET_ACCESS_KEY" >> .env.production.local
         - echo "DAHBOX_STAKES_TABLE=${DAHBOX_STAKES_TABLE:-DAHBOX_STAKES}" >> .env.production.local
         - echo "ROLLEDGE_API_URL=$ROLLEDGE_API_URL" >> .env.production.local
+        - echo "FOOTBALL_API_KEY=$FOOTBALL_API_KEY" >> .env.production.local
         - npm run build
   artifacts:
     baseDirectory: .next
