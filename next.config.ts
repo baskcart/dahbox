@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
     CUSTOM_AWS_SECRET_ACCESS_KEY: process.env.CUSTOM_AWS_SECRET_ACCESS_KEY ?? "",
     DAHBOX_STAKES_TABLE:          process.env.DAHBOX_STAKES_TABLE          ?? "DAHBOX_STAKES",
     ROLLEDGE_API_URL:             process.env.ROLLEDGE_API_URL             ?? "https://w3ledger.com",
+    FOOTBALL_API_KEY:             process.env.FOOTBALL_API_KEY             ?? "",
   },
 };
 
