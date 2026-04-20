@@ -6,10 +6,12 @@ frontend:
         - npm ci --cache .npm --prefer-offline
     build:
       commands:
-        # Echo server-side credentials into .env.production.local so Next.js
-        # embeds them in the SSR Lambda bundle at build time.
-        # This is necessary because Amplify WEB_COMPUTE only guarantees these
-        # env vars during the build shell, not in the Lambda runtime.
+        # Diagnostic — prints YES/NO in the Amplify build log (never prints the value)
+        - echo "=== ENV DIAGNOSTIC ==="
+        - "[ -n \"$FOOTBALL_API_KEY\" ] && echo 'FOOTBALL_API_KEY: SET' || echo 'FOOTBALL_API_KEY: MISSING'"
+        - "[ -n \"$CUSTOM_AWS_ACCESS_KEY_ID\" ] && echo 'CUSTOM_AWS_ACCESS_KEY_ID: SET' || echo 'CUSTOM_AWS_ACCESS_KEY_ID: MISSING'"
+        - echo "=== END DIAGNOSTIC ==="
+        # Bake server-side env vars into .env.production.local for Lambda bundle
         - echo "CUSTOM_AWS_ACCESS_KEY_ID=$CUSTOM_AWS_ACCESS_KEY_ID" >> .env.production.local
         - echo "CUSTOM_AWS_SECRET_ACCESS_KEY=$CUSTOM_AWS_SECRET_ACCESS_KEY" >> .env.production.local
         - echo "DAHBOX_STAKES_TABLE=${DAHBOX_STAKES_TABLE:-DAHBOX_STAKES}" >> .env.production.local
