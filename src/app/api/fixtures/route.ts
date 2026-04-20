@@ -136,6 +136,8 @@ async function fetchFixturesForDate(date: string, apiKey: string): Promise<ApiFi
 
 export async function GET() {
   const apiKey = process.env.FOOTBALL_API_KEY;
+  // Diagnostic: safe to log — never logs the key value, only presence + length
+  console.log(`[fixtures] FOOTBALL_API_KEY present=${!!apiKey} length=${apiKey?.length ?? 0}`);
   if (!apiKey) {
     return NextResponse.json(
       { success: false, error: 'FOOTBALL_API_KEY is not configured.' },
