@@ -744,6 +744,14 @@ export default function DahBoxHome() {
         if (e.data.lang !== undefined) setSelectedLanguage(e.data.lang);
         if (e.data.genre !== undefined) setSelectedGenre(e.data.genre);
       }
+      // Allow Dahling TV to switch the top-level media tab remotely
+      if (e.data?.type === 'SET_MEDIA_TAB') {
+        const tab = e.data.tab as MediaType;
+        if (['movie', 'book', 'game', 'football'].includes(tab)) {
+          setMediaTab(tab);
+          setActiveCategory('all');
+        }
+      }
       // Scroll bridge: Memi sends touchmove/wheel delta → DahBox scrolls its content
       if (e.data?.type === 'DAHBOX_SCROLL' && typeof e.data.delta === 'number') {
         window.scrollBy({ top: e.data.delta, behavior: 'smooth' });
@@ -871,10 +879,8 @@ export default function DahBoxHome() {
         </div>
       </section>
 
-      {/* ─── Media Type Tabs ─── */}
-      {(!isTvView && !isRemote) && (
-        <>
-      <section className="max-w-7xl mx-auto px-4 pb-3">
+      {/* ─── Media Type Tabs — always visible (compact style in TV/remote mode) ─── */}
+      <section className={`max-w-7xl mx-auto px-4 ${isTvView || isRemote ? 'pt-3 pb-2' : 'pb-3'}`}>
         <div className="flex gap-1 p-1 rounded-2xl bg-white/5 border border-white/10 w-fit">
           {[
             { id: 'movie'    as MediaType, label: 'Movies',   icon: <Film className="w-4 h-4" />,        color: 'from-purple-500 to-amber-500' },
@@ -900,7 +906,6 @@ export default function DahBoxHome() {
           })}
         </div>
       </section>
-
 
       {/* â”€â”€â”€ Category Tabs â”€â”€â”€ */}
       <section className="max-w-7xl mx-auto px-4 pb-2">
@@ -930,10 +935,8 @@ export default function DahBoxHome() {
           })}
         </div>
       </section>
-        </>
-      )}
 
-      {/* â”€â”€â”€ Language & Genre Filters (Movies only) â”€â”€â”€ */}
+      {/* ——— Language & Genre Filters (Movies only) ——— */}
       {!isTvView && mediaTab === 'movie' && (
       <section className="max-w-7xl mx-auto px-4 pb-4">
         <div className="flex flex-wrap items-center gap-3">

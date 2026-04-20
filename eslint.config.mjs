@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Root-level debug/test scripts — plain Node.js CommonJS, not part of the Next.js app
+    "check-env.js",
+    "test-fixtures.js",
+    "test_dynamo.mjs",
   ]),
 ]);
 
